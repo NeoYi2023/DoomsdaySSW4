@@ -30,6 +30,13 @@ public class GameInitializer : MonoBehaviour
         Debug.Log("游戏设置已初始化");
         Debug.Log($"当前分辨率: {Screen.width}x{Screen.height}, 全屏: {Screen.fullScreen}");
         Debug.Log($"当前语言: {localizationManager.GetCurrentLanguage()}");
+
+        // 初始化游戏管理器并开始新游戏
+        GameManager gameManager = GameManager.Instance;
+        if (gameManager != null && !gameManager.IsGameInitialized())
+        {
+            gameManager.StartNewGame();
+        }
     }
 
     /// <summary>
