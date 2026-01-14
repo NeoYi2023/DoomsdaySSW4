@@ -1,0 +1,85 @@
+{
+  "languageCode": "en-US",
+  "entries": [
+    {
+      "key": "ui.menu.start",
+      "value": "Start Game"
+    },
+    {
+      "key": "ui.menu.load",
+      "value": "Load Game"
+    },
+    {
+      "key": "ui.menu.settings",
+      "value": "Settings"
+    },
+    {
+      "key": "ui.menu.quit",
+      "value": "Quit Game"
+    },
+    {
+      "key": "ui.settings.title",
+      "value": "Game Settings"
+    },
+    {
+      "key": "ui.settings.resolution",
+      "value": "Resolution"
+    },
+    {
+      "key": "ui.settings.resolution.preset",
+      "value": "Preset Resolution"
+    },
+    {
+      "key": "ui.settings.resolution.custom",
+      "value": "Custom Resolution"
+    },
+    {
+      "key": "ui.settings.resolution.width",
+      "value": "Width"
+    },
+    {
+      "key": "ui.settings.resolution.height",
+      "value": "Height"
+    },
+    {
+      "key": "ui.settings.fullscreen",
+      "value": "Fullscreen Mode"
+    },
+    {
+      "key": "ui.settings.language",
+      "value": "Language"
+    },
+    {
+      "key": "ui.settings.language.zh-CN",
+      "value": "简体中文"
+    },
+    {
+      "key": "ui.settings.language.zh-TW",
+      "value": "繁體中文"
+    },
+    {
+      "key": "ui.settings.language.en-US",
+      "value": "English"
+    },
+    {
+      "key": "ui.settings.apply",
+      "value": "Apply Settings"
+    },
+    {
+      "key": "ui.settings.cancel",
+      "value": "Cancel"
+    },
+    {
+      "key": "ui.settings.save",
+      "value": "Save"
+    },
+    {
+      "key": "ui.common.confirm",
+      "value": "Confirm"
+    },
+    {
+      "key": "ui.common.back",
+      "value": "Back"
+    }
+  ]
+}

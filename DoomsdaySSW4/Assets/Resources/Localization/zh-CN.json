@@ -1,0 +1,85 @@
+{
+  "languageCode": "zh-CN",
+  "entries": [
+    {
+      "key": "ui.menu.start",
+      "value": "开始游戏"
+    },
+    {
+      "key": "ui.menu.load",
+      "value": "加载游戏"
+    },
+    {
+      "key": "ui.menu.settings",
+      "value": "设置"
+    },
+    {
+      "key": "ui.menu.quit",
+      "value": "退出游戏"
+    },
+    {
+      "key": "ui.settings.title",
+      "value": "游戏设置"
+    },
+    {
+      "key": "ui.settings.resolution",
+      "value": "分辨率"
+    },
+    {
+      "key": "ui.settings.resolution.preset",
+      "value": "预设分辨率"
+    },
+    {
+      "key": "ui.settings.resolution.custom",
+      "value": "自定义分辨率"
+    },
+    {
+      "key": "ui.settings.resolution.width",
+      "value": "宽度"
+    },
+    {
+      "key": "ui.settings.resolution.height",
+      "value": "高度"
+    },
+    {
+      "key": "ui.settings.fullscreen",
+      "value": "全屏模式"
+    },
+    {
+      "key": "ui.settings.language",
+      "value": "语言"
+    },
+    {
+      "key": "ui.settings.language.zh-CN",
+      "value": "简体中文"
+    },
+    {
+      "key": "ui.settings.language.zh-TW",
+      "value": "繁体中文"
+    },
+    {
+      "key": "ui.settings.language.en-US",
+      "value": "English"
+    },
+    {
+      "key": "ui.settings.apply",
+      "value": "应用设置"
+    },
+    {
+      "key": "ui.settings.cancel",
+      "value": "取消"
+    },
+    {
+      "key": "ui.settings.save",
+      "value": "保存"
+    },
+    {
+      "key": "ui.common.confirm",
+      "value": "确认"
+    },
+    {
+      "key": "ui.common.back",
+      "value": "返回"
+    }
+  ]
+}
