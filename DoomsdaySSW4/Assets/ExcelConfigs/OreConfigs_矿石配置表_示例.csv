@@ -1,0 +1,6 @@
+oreId,oreName,oreType,hardness,requiredAttributeKey,requiredAttributeValue,value,isEnergyOre,energyValue,minDepth,maxDepth,spawnProbability
+iron,铁矿石,Common,10,,0,50,false,0,1,5,0.0
+gold,金矿石,Rare,20,,0,200,false,0,2,10,0.0
+diamond,钻石,Rare,35,,0,500,false,0,4,10,0.0
+crystal,水晶,Special,25,,0,300,false,0,3,9,0.0
+energy_core,能源核心,Energy,15,,0,0,true,10,1,10,0.0

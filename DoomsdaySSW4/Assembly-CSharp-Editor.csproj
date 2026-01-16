@@ -61,6 +61,9 @@
     <Compile Include="Assets\Editor\ProjectSetupHelper.cs" />
     <Compile Include="Assets\Editor\TMPInstaller.cs" />
     <Compile Include="Assets\Editor\SceneSetupHelper.cs" />
+    <Compile Include="Assets\Editor\SetChineseFont.cs" />
+    <Compile Include="Assets\Editor\ExcelToJsonConverter.cs" />
+    <Compile Include="Assets\Editor\GameRuntimeChecker.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

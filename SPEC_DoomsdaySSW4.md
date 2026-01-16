@@ -21,7 +21,7 @@
 - **任务系统**: 基于配置表的基础任务和进阶任务系统，每个任务有回合限制，完成任务后自动领取下一个任务
 - **回合制挖矿系统**: 每个回合，挖矿船按照初始装配的钻头，对钻头所在的小行星地面进行挖掘
 - **钻头系统**: 钻头有挖掘范围（长宽格子数）和挖掘强度，可通过类Rogue三选一和发现失落的装备来升级
-- **挖掘强度和矿石系统**: 不同类型的矿石需要不同的挖掘强度才能钻通，矿石随挖矿深度（层数）逐渐不同
+- **挖掘强度和矿石系统**: 不同类型的矿石有自己的硬度（血量），需要用挖掘强度（攻击）去抵消硬度才能钻通，矿石随挖矿深度（层数）逐渐不同
 - **矿石转化系统**: 钻通的矿石自动根据不同矿石的价值转化成金钱，用于偿还债务
 - **能源升级系统**: 收集能源矿石，达到一定值触发类Rogue三选一玩法，对挖掘船或勘探矿石进行升级（仅本关内生效）
 - **信用积分系统**: 完成胜利结算后获得信用积分，用于永久增强挖掘船的属性
@@ -536,8 +536,8 @@ public class MiningData
     public List<MiningLayer> layers;  // 各层挖矿地图
     
     // 地图尺寸（固定）
-    public const int LAYER_WIDTH = 9;   // 每层宽度（长）
-    public const int LAYER_HEIGHT = 7;   // 每层高度（宽）
+    public const int LAYER_WIDTH = 9;   // 每层宽度（列数）
+    public const int LAYER_HEIGHT = 9;   // 每层高度（行数）
     
     // 资源相关
     public Dictionary<MineralType, int> minerals; // 已挖掘的矿物
@@ -554,8 +554,8 @@ public class MiningData
 public class MiningLayer
 {
     public int layerDepth;            // 层数（深度）
-    public OreData[,] oreGrid;        // 矿石网格（9x7，固定尺寸）
-    public Vector2Int drillCenter;   // 钻头中心点位置（默认为中心点：4,3）
+    public OreData[,] oreGrid;        // 矿石网格（9x9，固定尺寸）
+    public Vector2Int drillCenter;   // 钻头中心点位置（默认为中心点：4,4）
 }
 
 [System.Serializable]
@@ -1122,7 +1122,7 @@ public class MiningManager : MonoBehaviour
     public void GenerateLayerOres(int layerDepth, OreSpawnConfig spawnConfig) { }
     
     // 获取钻头中心点位置（默认在层中心）
-    public Vector2Int GetDrillCenterPosition(int layerDepth) { return new Vector2Int(4, 3); } // 9x7的中心点
+    public Vector2Int GetDrillCenterPosition(int layerDepth) { return new Vector2Int(4, 4); } // 9x9的中心点
     
     // 每回合攻击矿石（攻击值/血量机制）
     public void AttackOresInRange(DrillData drill, int layerDepth) { }
@@ -1944,8 +1944,8 @@ UI系统
 
 3. **回合制挖矿系统**
    - 每个回合，挖矿船按照初始装配的钻头进行挖掘
-   - 每层地图固定为长9格、宽7格的网格
-   - 钻头的中心点位置默认在每层地图的中心点（长9格、宽7格的中心）
+   - 每层地图固定为9列×9行的网格（LAYER_WIDTH = 9, LAYER_HEIGHT = 9）
+   - 钻头的中心点位置默认在每层地图的中心点（4, 4）
    - 初始默认钻头范围：长5格、宽5格
    - 挖掘范围由钻头的长宽格子数决定（初始为5x5）
    - 挖掘深度（层数）向下递增，不同深度有不同的矿石分布
@@ -2154,6 +2154,18 @@ UI系统
    - 挖掉的矿石立即转化为金钱（根据配置表的价值）
    - 能源矿石累计到能源值，不转化为金钱
    - 挖掘深度（层数）影响矿石类型、硬度和所需额外属性
+   - **挖矿地图尺寸规则**：
+     - 每层地图固定为9列×9行的网格（LAYER_WIDTH = 9, LAYER_HEIGHT = 9）
+     - 钻头的中心点位置默认在每层地图的中心点（4, 4）
+     - 地图尺寸由常量定义，不可动态修改
+   - **挖矿地图高亮规则**：
+     - 在挖矿地图上，根据钻头的攻击范围进行视觉高亮显示
+     - 高亮规则：在钻头攻击范围内的格子会高亮显示（混合淡黄色，30%混合度）
+     - 变暗规则：不在攻击范围内的格子会变暗显示（降低透明度至30%）
+     - 高亮计算：基于钻头中心位置（layer.drillCenter）和有效攻击范围（drill.GetEffectiveRange()）计算
+     - 攻击范围计算：以钻头中心为基准，计算矩形攻击区域（minX, maxX, minY, maxY）
+     - 高亮更新：地图更新时自动刷新高亮状态，钻头范围变化时也会自动更新
+     - 高亮配置：可通过MiningMapView组件的Inspector配置高亮颜色、变暗透明度、是否启用高亮
 
 3. **任务规则（债务偿还规则）**
    - 每个任务就是要求在限定回合数内偿还指定金额的债务
@@ -2189,6 +2201,49 @@ UI系统
    - 信用积分用于永久增强挖掘船属性
    - 永久增强包括基础挖掘强度、基础挖掘范围等
    - 信用积分永久保存，跨游戏会话有效
+
+8. **UI显示规则**
+   - **挖矿地图自适应规则**：
+     - 挖矿地图支持自适应大小调整，根据父容器（LeftPanel）的大小自动计算格子大小
+     - 自适应计算公式：格子大小 = (可用空间 - 间距总宽度) / 格子数量
+     - 可用空间 = 容器大小 - padding（左右/上下）
+     - 间距总宽度 = 间距 × (格子数量 - 1)
+     - 支持配置：是否启用自适应（autoResize）、是否使用父容器大小（useParentSize）、格子间距（spacing）
+     - 当容器大小变化时，自动重新计算格子大小（OnRectTransformDimensionsChange回调）
+   - **Canvas保持激活规则**：
+     - Canvas组件在运行时必须始终保持激活状态
+     - 使用CanvasKeeper组件确保Canvas在Awake、OnEnable、Start、Update等生命周期中保持激活
+     - 当Canvas被意外禁用时，自动在下一帧重新激活（通过协程实现）
+     - 防止在退出Play模式时触发协程错误（检查Application.isPlaying和gameObject.activeInHierarchy）
+   - **字体显示规则**：
+     - 使用TextMeshPro进行文本渲染，支持中文字体
+     - 自动加载中文字体资源（从Resources目录）
+     - 支持运行时动态设置字体（GameScreen、MiningMapView等组件）
+     - 字体资源必须包含中文字符查找表（characterLookupTable）
+  - **升级界面背景图规则**：
+    - UpgradeSelectionScreen 的 BackgroundImage 始终保持激活状态
+    - BackgroundImage 不随三选一面板的显示/隐藏切换激活状态
+
+9. **分辨率设置规则**
+   - 支持预设分辨率选项和自定义分辨率输入
+   - 预设分辨率包括：1920x1080、1680x1050、1600x900、1440x900、1366x768、1280x720、1024x768
+   - 支持全屏/窗口模式切换
+   - 自动检测系统支持的分辨率列表（通过Screen.resolutions）
+   - 分辨率设置持久化保存（使用PlayerPrefs或JSON配置文件）
+   - 游戏启动时自动加载并应用保存的分辨率设置
+   - 分辨率验证：验证用户输入的分辨率是否在系统支持范围内
+   - 分辨率应用：使用Screen.SetResolution(width, height, fullscreen)设置分辨率
+
+10. **本地化规则**
+   - 支持多语言切换：简体中文（zh-CN）、繁体中文（zh-TW）、英文（en-US）
+   - 语言资源文件使用JSON格式存储（位于Assets/Resources/Localization/）
+   - 语言代码使用标准格式（zh-CN, zh-TW, en-US）
+   - 文本键值对映射系统：键为文本ID，值为翻译文本
+   - 支持运行时动态切换语言（通过LocalizationManager.SetLanguage()）
+   - 语言设置持久化保存（使用PlayerPrefs）
+   - 游戏启动时自动加载保存的语言设置
+   - UI组件通过LocalizedText组件或LocalizationManager.GetLocalizedString()获取本地化文本
+   - 支持带参数的文本格式化（GetLocalizedString(key, params object[] args)）
 
 ### 7.3 配置表系统详细设计
 
@@ -2537,8 +2592,10 @@ string text = LocalizationManager.Instance.GetLocalizedString("ui.menu.start");
 | - | 1.3 | 更新核心玩法为租船挖矿系统：添加租船债务、任务系统、钻头强度、矿石转化、能源升级、信用积分等完整机制，添加配置表系统设计 | - |
 | - | 1.4 | 明确任务系统就是债务偿还系统：任务目标为在限定回合数内偿还指定债务，成功则完成任务，失败则挑战失败 | - |
 | - | 1.5 | 更新挖掘强度和矿石系统为攻击值/血量机制：钻头攻击值每回合对矿石血量造成伤害，矿石血量为零后则被挖掉，部分矿石需要额外钻头属性 | - |
-| - | 1.6 | 添加关卡层矿石生成规则：每层固定9x7网格，按层数配置矿石生成规则（权重、最大数量），钻头中心点默认在层中心，初始钻头范围5x5 |
+| - | 1.6 | 添加关卡层矿石生成规则：每层固定9x9网格，按层数配置矿石生成规则（权重、最大数量），钻头中心点默认在层中心(4,4)，初始钻头范围5x5 | - |
 | - | 1.7 | 添加分辨率设置和本地化系统：支持预设/自定义分辨率、全屏模式切换，支持简体中文、繁体中文、英文三种语言 | - |
+| - | 1.8 | 更新挖矿地图尺寸：从9x7改为9x9网格，钻头中心点从(4,3)更新为(4,4) | - |
+| - | 1.9 | 添加挖矿地图高亮规则：在攻击范围内的格子高亮显示，范围外的格子变暗显示；添加UI自适应规则、Canvas保持激活规则、字体显示规则 | - |
 
 ---
 
