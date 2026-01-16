@@ -1,0 +1,74 @@
+﻿{
+    "ores": [
+        {
+            "oreId": "iron",
+            "oreName": "铁矿石",
+            "oreType": 0,
+            "hardness": 10,
+            "requiredAttributeKey": "",
+            "requiredAttributeValue": 0,
+            "value": 50,
+            "isEnergyOre": false,
+            "energyValue": 0,
+            "minDepth": 1,
+            "maxDepth": 5,
+            "spawnProbability": 0.0
+        },
+        {
+            "oreId": "gold",
+            "oreName": "金矿石",
+            "oreType": 1,
+            "hardness": 20,
+            "requiredAttributeKey": "",
+            "requiredAttributeValue": 0,
+            "value": 200,
+            "isEnergyOre": false,
+            "energyValue": 0,
+            "minDepth": 2,
+            "maxDepth": 10,
+            "spawnProbability": 0.0
+        },
+        {
+            "oreId": "diamond",
+            "oreName": "钻石",
+            "oreType": 1,
+            "hardness": 35,
+            "requiredAttributeKey": "",
+            "requiredAttributeValue": 0,
+            "value": 500,
+            "isEnergyOre": false,
+            "energyValue": 0,
+            "minDepth": 4,
+            "maxDepth": 10,
+            "spawnProbability": 0.0
+        },
+        {
+            "oreId": "crystal",
+            "oreName": "水晶",
+            "oreType": 3,
+            "hardness": 25,
+            "requiredAttributeKey": "",
+            "requiredAttributeValue": 0,
+            "value": 300,
+            "isEnergyOre": false,
+            "energyValue": 0,
+            "minDepth": 3,
+            "maxDepth": 9,
+            "spawnProbability": 0.0
+        },
+        {
+            "oreId": "energy_core",
+            "oreName": "能源核心",
+            "oreType": 2,
+            "hardness": 15,
+            "requiredAttributeKey": "",
+            "requiredAttributeValue": 0,
+            "value": 0,
+            "isEnergyOre": true,
+            "energyValue": 10,
+            "minDepth": 1,
+            "maxDepth": 10,
+            "spawnProbability": 0.0
+        }
+    ]
+}

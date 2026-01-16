@@ -1,0 +1,12 @@
+﻿{
+    "drills": [
+        {
+            "drillId": "default_drill",
+            "drillName": "默认钻头",
+            "miningStrength": 10,
+            "miningRangeX": 5,
+            "miningRangeY": 5,
+            "description": "默认钻头，攻击值10，范围5x5"
+        }
+    ]
+}

@@ -1,0 +1,12 @@
+﻿{
+    "thresholds": [
+        {
+            "shipId": "default_ship",
+            "energyThresholds": [
+                50,
+                100,
+                150
+            ]
+        }
+    ]
+}

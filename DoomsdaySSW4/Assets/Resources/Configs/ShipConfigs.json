@@ -1,0 +1,10 @@
+﻿{
+    "ships": [
+        {
+            "shipId": "default_ship",
+            "shipName": "默认挖矿船",
+            "initialDebt": 3000,
+            "description": "起始债务3000的默认挖矿船"
+        }
+    ]
+}
