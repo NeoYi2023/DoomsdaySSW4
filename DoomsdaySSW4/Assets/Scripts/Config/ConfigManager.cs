@@ -31,6 +31,8 @@ public class ConfigManager : MonoBehaviour
     private List<EnergyUpgradeConfig> _energyUpgradeConfigs = new List<EnergyUpgradeConfig>();
     private Dictionary<string, EnergyThresholdConfig> _energyThresholdConfigs = new Dictionary<string, EnergyThresholdConfig>();
     private List<int> _energyThresholds = new List<int> { 50, 100, 150 }; // 默认能源阈值（向后兼容）
+    private List<TileHardnessColorThreshold> _tileHardnessThresholds = new List<TileHardnessColorThreshold>();
+    private readonly Color _defaultLowHardnessColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
 
     private bool _isLoaded = false;
 
@@ -65,6 +67,7 @@ public class ConfigManager : MonoBehaviour
         LoadOreSpawnConfigs();
         LoadEnergyUpgradeConfigs();
         LoadEnergyThresholdConfigs();
+        LoadTileHardnessColorConfigs();
 
         _isLoaded = true;
         Debug.Log("所有配置加载完成");
@@ -378,6 +381,82 @@ public class ConfigManager : MonoBehaviour
         {
             Debug.LogError($"解析能源阈值配置失败: {e.Message}");
         }
+    }
+
+    /// <summary>
+    /// 加载硬度颜色配置
+    /// </summary>
+    public void LoadTileHardnessColorConfigs()
+    {
+        TextAsset textAsset = Resources.Load<TextAsset>("Configs/TileHardnessColorConfigs");
+        if (textAsset == null)
+        {
+            Debug.LogWarning("无法加载硬度颜色配置: Configs/TileHardnessColorConfigs，使用默认颜色");
+            return;
+        }
+
+        try
+        {
+            TileHardnessColorConfigCollection collection = JsonUtility.FromJson<TileHardnessColorConfigCollection>(textAsset.text);
+            _tileHardnessThresholds.Clear();
+
+            if (collection != null && collection.thresholds != null)
+            {
+                _tileHardnessThresholds.AddRange(collection.thresholds);
+                _tileHardnessThresholds = _tileHardnessThresholds
+                    .OrderBy(t => t.maxHardness)
+                    .ToList();
+            }
+
+            Debug.Log($"成功加载 {_tileHardnessThresholds.Count} 条硬度颜色配置");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"解析硬度颜色配置失败: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 根据硬度获取颜色（矿石格子）
+    /// </summary>
+    public Color GetHardnessColor(int hardness)
+    {
+        if (_tileHardnessThresholds == null || _tileHardnessThresholds.Count == 0)
+        {
+            return _defaultLowHardnessColor;
+        }
+
+        foreach (var threshold in _tileHardnessThresholds)
+        {
+            if (hardness <= threshold.maxHardness)
+            {
+                if (TryParseHexColor(threshold.colorHex, out Color color))
+                {
+                    return color;
+                }
+                return _defaultLowHardnessColor;
+            }
+        }
+
+        TileHardnessColorThreshold last = _tileHardnessThresholds[_tileHardnessThresholds.Count - 1];
+        if (TryParseHexColor(last.colorHex, out Color lastColor))
+        {
+            return lastColor;
+        }
+        return _defaultLowHardnessColor;
+    }
+
+    private bool TryParseHexColor(string hex, out Color color)
+    {
+        if (!string.IsNullOrEmpty(hex))
+        {
+            if (ColorUtility.TryParseHtmlString("#" + hex, out color))
+            {
+                return true;
+            }
+        }
+        color = _defaultLowHardnessColor;
+        return false;
     }
 
     /// <summary>

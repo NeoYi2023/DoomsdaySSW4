@@ -20,6 +20,7 @@ public class MiningMapView : MonoBehaviour
 
     private MiningManager _miningManager;
     private DrillManager _drillManager;
+    private ConfigManager _configManager;
     private List<GameObject> _tileObjects = new List<GameObject>();
     private Dictionary<Vector2Int, GameObject> _tileMap = new Dictionary<Vector2Int, GameObject>(); // 坐标到GameObject的映射
     private Dictionary<Vector2Int, Color> _baseColors = new Dictionary<Vector2Int, Color>(); // 存储每个格子的基础颜色
@@ -40,26 +41,13 @@ public class MiningMapView : MonoBehaviour
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 0.5f, 1f); // 高亮颜色（淡黄色）
     [SerializeField] private float dimmedAlpha = 0.3f; // 变暗的透明度
     
-    [Header("硬度颜色设置")]
-    [SerializeField] private Color lowHardnessColor = new Color32(0xE3, 0xC1, 0x76, 0xFF); // 硬度最低颜色
-    [SerializeField] private Color highHardnessColor = new Color32(0x4F, 0x41, 0x1F, 0xFF); // 硬度最高颜色
-    private int _minOreHardness = 0;
-    private int _maxOreHardness = 0;
-
-    // 矿石颜色映射
-    private readonly Dictionary<MineralType, Color> _oreColors = new Dictionary<MineralType, Color>
-    {
-        { MineralType.Iron, new Color(0.5f, 0.5f, 0.5f) },      // 灰色
-        { MineralType.Gold, new Color(1f, 0.84f, 0f) },          // 金色
-        { MineralType.Diamond, new Color(0.2f, 0.6f, 1f) },     // 蓝色
-        { MineralType.Crystal, new Color(0.8f, 0.2f, 1f) },     // 紫色
-        { MineralType.EnergyCore, new Color(0.2f, 1f, 0.2f) }   // 绿色
-    };
+    private readonly Color _defaultOreColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
 
     private void Awake()
     {
         _miningManager = MiningManager.Instance;
         _drillManager = DrillManager.Instance;
+        _configManager = ConfigManager.Instance;
         _containerRectTransform = GetComponent<RectTransform>();
         
         // 获取父容器（LeftPanel）的RectTransform
@@ -238,9 +226,6 @@ public class MiningMapView : MonoBehaviour
         // 清除旧的瓦片（会同时清除映射）
         ClearTiles();
 
-        // 更新当前层矿石硬度范围（用于颜色渐变）
-        UpdateOreHardnessRange(grid);
-
         // 创建新的瓦片
         for (int y = MiningManager.LAYER_HEIGHT - 1; y >= 0; y--) // 从下往上显示
         {
@@ -355,61 +340,14 @@ public class MiningMapView : MonoBehaviour
             case TileType.Rock:
                 return new Color(0.4f, 0.4f, 0.4f); // 岩石：灰色
             case TileType.Ore:
-                return GetHardnessGradientColor(tileData.hardness);
+                if (_configManager != null)
+                {
+                    return _configManager.GetHardnessColor(tileData.hardness);
+                }
+                return _defaultOreColor;
             default:
                 return Color.gray;
         }
-    }
-
-    /// <summary>
-    /// 根据当前层矿石硬度范围计算颜色渐变
-    /// </summary>
-    private Color GetHardnessGradientColor(int hardness)
-    {
-        if (_maxOreHardness <= _minOreHardness)
-        {
-            return lowHardnessColor;
-        }
-
-        float t = (hardness - _minOreHardness) / (float)(_maxOreHardness - _minOreHardness);
-        t = Mathf.Clamp01(t);
-        return Color.Lerp(lowHardnessColor, highHardnessColor, t);
-    }
-
-    /// <summary>
-    /// 计算当前层矿石硬度范围
-    /// </summary>
-    private void UpdateOreHardnessRange(MiningTileData[,] grid)
-    {
-        int minHardness = int.MaxValue;
-        int maxHardness = int.MinValue;
-        bool hasOre = false;
-
-        for (int x = 0; x < grid.GetLength(0); x++)
-        {
-            for (int y = 0; y < grid.GetLength(1); y++)
-            {
-                MiningTileData tile = grid[x, y];
-                if (tile.tileType != TileType.Ore || tile.isMined)
-                {
-                    continue;
-                }
-
-                hasOre = true;
-                if (tile.hardness < minHardness) minHardness = tile.hardness;
-                if (tile.hardness > maxHardness) maxHardness = tile.hardness;
-            }
-        }
-
-        if (!hasOre)
-        {
-            _minOreHardness = 0;
-            _maxOreHardness = 0;
-            return;
-        }
-
-        _minOreHardness = minHardness;
-        _maxOreHardness = maxHardness;
     }
 
     /// <summary>

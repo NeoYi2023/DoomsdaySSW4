@@ -1,0 +1,9 @@
+{
+  "thresholds": [
+    { "maxHardness": 10, "colorHex": "E3C176" },
+    { "maxHardness": 20, "colorHex": "D4B56B" },
+    { "maxHardness": 30, "colorHex": "C0A25E" },
+    { "maxHardness": 40, "colorHex": "A0844B" },
+    { "maxHardness": 999, "colorHex": "4F411F" }
+  ]
+}
