@@ -18,6 +18,12 @@ public class ResourceDisplay : MonoBehaviour
         _gameManager = GameManager.Instance;
     }
 
+    private void Start()
+    {
+        // 应用动态字体
+        ApplyDynamicFont();
+    }
+
     private void Update()
     {
         UpdateDisplay();
@@ -48,5 +54,13 @@ public class ResourceDisplay : MonoBehaviour
         {
             debtText.text = $"债务: {state.debtData.RemainingDebt} / {state.debtData.totalDebt}";
         }
+    }
+
+    /// <summary>
+    /// 应用动态字体到所有文本组件
+    /// </summary>
+    private void ApplyDynamicFont()
+    {
+        FontHelper.ApplyFontToGameObject(gameObject);
     }
 }

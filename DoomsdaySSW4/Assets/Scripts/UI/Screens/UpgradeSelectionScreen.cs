@@ -16,6 +16,7 @@ public class UpgradeSelectionScreen : MonoBehaviour
     [SerializeField] private TextMeshProUGUI[] optionNameTexts = new TextMeshProUGUI[3];
     [SerializeField] private TextMeshProUGUI[] optionDescriptionTexts = new TextMeshProUGUI[3];
     [SerializeField] private UnityEngine.UI.Image[] optionIcons = new UnityEngine.UI.Image[3]; // 升级选项图标
+    [SerializeField] private TextMeshProUGUI[] optionButtonTexts = new TextMeshProUGUI[3]; // 按钮上的文本组件
 
     private GameManager _gameManager;
     private List<EnergyUpgradeOption> _currentOptions;
@@ -140,6 +141,9 @@ public class UpgradeSelectionScreen : MonoBehaviour
                 optionButtons[i].onClick.AddListener(() => this.OnOptionSelected(index));
             }
         }
+        
+        // 应用动态字体
+        ApplyDynamicFont();
     }
 
     /// <summary>
@@ -212,6 +216,57 @@ public class UpgradeSelectionScreen : MonoBehaviour
                 {
                     Debug.Log($"自动找到图标: Option{i + 1}Button的Image组件");
                 }
+            }
+        }
+
+        // 查找或创建按钮文本组件
+        for (int i = 0; i < optionButtonTexts.Length; i++)
+        {
+            if (optionButtonTexts[i] == null && optionButtons[i] != null)
+            {
+                // 优先查找按钮子对象中已存在的 TextMeshProUGUI 组件
+                TextMeshProUGUI existingText = optionButtons[i].GetComponentInChildren<TextMeshProUGUI>(true);
+                if (existingText != null)
+                {
+                    optionButtonTexts[i] = existingText;
+                    Debug.Log($"自动找到按钮文本: Option{i + 1}Button的TextMeshProUGUI组件");
+                }
+                else
+                {
+                    // 如果不存在，创建新的文本组件作为按钮的子对象
+                    GameObject textObj = new GameObject("ButtonText");
+                    textObj.transform.SetParent(optionButtons[i].transform, false);
+                    
+                    // 确保文本组件在按钮子对象列表的最后，这样会渲染在最前面（不被Image遮挡）
+                    textObj.transform.SetAsLastSibling();
+                    
+                    RectTransform textRect = textObj.AddComponent<RectTransform>();
+                    // 设置锚点和轴心为居中，确保文本在按钮中心
+                    textRect.anchorMin = new Vector2(0.5f, 0.5f);
+                    textRect.anchorMax = new Vector2(0.5f, 0.5f);
+                    textRect.pivot = new Vector2(0.5f, 0.5f);
+                    textRect.anchoredPosition = Vector2.zero; // 强制设置为(0, 0)
+                    textRect.sizeDelta = new Vector2(160, 50); // 设置合适的尺寸
+                    
+                    TextMeshProUGUI text = textObj.AddComponent<TextMeshProUGUI>();
+                    text.text = "选择";
+                    text.fontSize = 18;
+                    text.alignment = TextAlignmentOptions.Center;
+                    text.color = Color.white;
+                    // 确保文本组件可以接收射线（用于交互）
+                    CanvasGroup canvasGroup = textObj.GetComponent<CanvasGroup>();
+                    if (canvasGroup == null)
+                    {
+                        canvasGroup = textObj.AddComponent<CanvasGroup>();
+                    }
+                    canvasGroup.blocksRaycasts = false; // 不阻挡射线，让按钮可以点击
+                    
+                    optionButtonTexts[i] = text;
+                    Debug.Log($"自动创建按钮文本: Option{i + 1}Button");
+                }
+            }
+            else
+            {
             }
         }
 
@@ -434,6 +489,33 @@ public class UpgradeSelectionScreen : MonoBehaviour
                 // 确保按钮可以交互
                 optionButtons[i].interactable = true;
             }
+
+            // 设置按钮文本
+            if (optionButtonTexts[i] != null)
+            {
+                optionButtonTexts[i].text = "选择";
+                optionButtonTexts[i].gameObject.SetActive(true);
+                // 强制设置文本颜色为白色，确保可见
+                optionButtonTexts[i].color = Color.white;
+                // 确保文本组件在按钮子对象列表的最后，这样会渲染在最前面
+                optionButtonTexts[i].transform.SetAsLastSibling();
+                // 修复RectTransform位置，确保文本在按钮中心
+                RectTransform textRect = optionButtonTexts[i].rectTransform;
+                textRect.anchorMin = new Vector2(0.5f, 0.5f);
+                textRect.anchorMax = new Vector2(0.5f, 0.5f);
+                textRect.pivot = new Vector2(0.5f, 0.5f);
+                textRect.anchoredPosition = Vector2.zero;
+                // 如果尺寸为0，设置默认尺寸
+                if (textRect.sizeDelta.x <= 0 || textRect.sizeDelta.y <= 0)
+                {
+                    textRect.sizeDelta = new Vector2(160, 50);
+                }
+                // 应用动态字体
+                FontHelper.ApplyFontToText(optionButtonTexts[i]);
+            }
+            else
+            {
+            }
         }
 
         // 隐藏多余的按钮
@@ -612,6 +694,14 @@ public class UpgradeSelectionScreen : MonoBehaviour
             Debug.LogWarning($"无法加载升级图标: {iconPath}");
             image.gameObject.SetActive(false);
         }
+    }
+
+    /// <summary>
+    /// 应用动态字体到所有文本组件
+    /// </summary>
+    private void ApplyDynamicFont()
+    {
+        FontHelper.ApplyFontToGameObject(gameObject);
     }
 }
 

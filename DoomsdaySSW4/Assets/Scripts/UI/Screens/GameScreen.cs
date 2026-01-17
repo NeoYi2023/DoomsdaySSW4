@@ -96,6 +96,8 @@ public class GameScreen : MonoBehaviour
             _gameManager.OnVictory.AddListener(OnVictory);
             _gameManager.OnGameOver.AddListener(OnGameOver);
             _gameManager.OnGameStateChanged.AddListener(OnGameStateChanged);
+            _gameManager.OnTurnProcessingStarted.AddListener(OnTurnProcessingStarted);
+            _gameManager.OnTurnProcessingCompleted.AddListener(OnTurnProcessingCompleted);
         }
 
         // 订阅能源升级事件
@@ -108,8 +110,8 @@ public class GameScreen : MonoBehaviour
         // 强制激活所有UI元素
         ForceActivateAllUIElements();
 
-        // 尝试设置中文字体
-        TrySetChineseFont();
+        // 应用动态字体到所有文本组件
+        ApplyDynamicFont();
 
         // 初始化UI显示
         UpdateUI();
@@ -427,5 +429,37 @@ public class GameScreen : MonoBehaviour
     private void OnGameStateChanged()
     {
         UpdateUI();
+    }
+
+    /// <summary>
+    /// 应用动态字体到所有文本组件
+    /// </summary>
+    private void ApplyDynamicFont()
+    {
+        FontHelper.ApplyFontToGameObject(gameObject);
+    }
+
+    /// <summary>
+    /// 回合处理开始（动画开始）
+    /// </summary>
+    private void OnTurnProcessingStarted()
+    {
+        // 禁用结束回合按钮，防止重复点击
+        if (endTurnButton != null)
+        {
+            endTurnButton.interactable = false;
+        }
+    }
+
+    /// <summary>
+    /// 回合处理完成（动画结束）
+    /// </summary>
+    private void OnTurnProcessingCompleted()
+    {
+        // 重新启用结束回合按钮
+        if (endTurnButton != null)
+        {
+            endTurnButton.interactable = true;
+        }
     }
 }

@@ -7,6 +7,11 @@ public class GameInitializer : MonoBehaviour
 {
     [Header("初始化设置")]
     [SerializeField] private bool initializeOnStart = true;
+    
+    [Header("字体加载")]
+    [SerializeField] private bool initializeFontOnStart = true;
+
+    private DynamicChineseFontLoader _fontLoader;
 
     private void Start()
     {
@@ -30,6 +35,28 @@ public class GameInitializer : MonoBehaviour
         Debug.Log("游戏设置已初始化");
         Debug.Log($"当前分辨率: {Screen.width}x{Screen.height}, 全屏: {Screen.fullScreen}");
         Debug.Log($"当前语言: {localizationManager.GetCurrentLanguage()}");
+
+        // 初始化动态中文字体
+        if (initializeFontOnStart)
+        {
+            InitializeDynamicFont();
+        }
+    }
+
+    /// <summary>
+    /// 初始化动态中文字体
+    /// </summary>
+    private void InitializeDynamicFont()
+    {
+        // 创建字体加载器 GameObject（如果不存在）
+        if (_fontLoader == null)
+        {
+            GameObject fontLoaderGO = new GameObject("DynamicChineseFontLoader");
+            _fontLoader = fontLoaderGO.AddComponent<DynamicChineseFontLoader>();
+        }
+
+        // 字体加载器会在 Start() 中自动创建和应用字体
+        Debug.Log("动态中文字体加载器已初始化");
     }
 
     /// <summary>

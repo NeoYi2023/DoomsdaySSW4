@@ -122,6 +122,7 @@ sequenceDiagram
 - **存档系统模块**: 负责游戏状态的保存和加载
 - **配置管理模块**: 负责游戏配置和设置管理
 - **资源管理模块**: Unity资源加载和管理系统
+- **字体管理模块**: 负责动态中文字体的加载、创建和应用，使用TextMeshPro动态字体模式实现按需生成字符，节省内存
 
 ## 3. 数据结构设计
 
@@ -1154,8 +1155,69 @@ public class MiningResult
     public int moneyGained;           // 获得的金钱
     public int energyGained;           // 获得的能源（如为能源矿石）
     public List<OreData> partiallyDamagedOres; // 部分受损但未挖掉的矿石
+    public List<AttackedTileInfo> attackedTiles; // 被攻击的格子信息（用于动效）
+}
+
+[System.Serializable]
+public class AttackedTileInfo
+{
+    public Vector2Int position;       // 格子坐标
+    public int attackStrength;       // 攻击强度值
 }
 ```
+
+### 4.4.1 挖矿动效系统
+
+挖矿动效系统为挖矿过程提供视觉反馈，增强游戏体验。
+
+#### 4.4.1.1 动效触发条件
+
+- 当钻机攻击矿石时，所有被攻击的格子（无论是否被挖掉）都会触发晃动动效
+- 只有被实际攻击的矿石格子才会播放动效（不包括空格或已挖掘的格子）
+
+#### 4.4.1.2 动效特性
+
+- **晃动中心**：以格子中心点为中心进行晃动
+- **晃动方向**：随机方向晃动，使用基于攻击强度的随机种子确保相同强度产生相同的随机参数
+- **持续时间**：晃动持续0.5秒
+- **视觉效果**：使用随机方向的位移实现自然晃动效果
+
+#### 4.4.1.3 同步机制
+
+- **相同强度同步**：相同强度值的攻击使用相同的动画参数（幅度、频率、方向等）
+- **完全同步**：所有被相同强度攻击的格子必须完全同步（同时开始、同时结束）
+- **不同强度独立**：不同强度的攻击可以独立播放，互不影响
+
+#### 4.4.1.4 回合控制
+
+- **回合暂停**：晃动期间回合不前进，所有游戏逻辑暂停
+- **动画完成后继续**：动画完成后才继续回合逻辑（资源处理、任务检查等）
+- **UI显示**：晃动期间不得隐藏其他UI界面，仅禁用必要交互
+
+#### 4.4.1.5 接口设计
+
+```csharp
+public class MiningMapView : MonoBehaviour
+{
+    // 播放晃动动画
+    // attackedTiles: 被攻击的格子信息列表
+    // 返回协程，用于等待动画完成
+    public IEnumerator PlayShakeAnimation(List<AttackedTileInfo> attackedTiles) { }
+    
+    // 内部方法：晃动协程
+    // tiles: 要晃动的格子GameObject列表
+    // strength: 攻击强度值（用于生成一致的随机参数）
+    private IEnumerator ShakeTilesCoroutine(List<GameObject> tiles, int strength) { }
+}
+```
+
+#### 4.4.1.6 实现细节
+
+- **随机种子**：使用攻击强度值作为随机种子，确保相同强度产生相同的动画参数
+- **晃动幅度**：默认 4.8 像素（在原基础上提升 20%）
+- **晃动频率**：建议 10-15 次/秒
+- **动画曲线**：使用缓入缓出的动画曲线，使晃动更自然
+- **性能优化**：如果同一帧有多个不同强度的攻击，可以合并处理
 
 ### 4.5 钻机系统接口
 
@@ -1482,6 +1544,46 @@ public class ConfigTableManager : MonoBehaviour
 }
 ```
 
+### 4.17 动态字体加载系统接口
+
+```csharp
+public class DynamicChineseFontLoader : MonoBehaviour
+{
+    // 字体配置属性（Inspector可配置）
+    [SerializeField] private string sourceFontPath = "Fonts/YaHei";        // Resources路径，不含扩展名
+    [SerializeField] private int samplingPointSize = 64;                   // 采样点大小
+    [SerializeField] private int padding = 9;                                // 字符间距
+    [SerializeField] private int atlasWidth = 512;                          // 纹理图集宽度
+    [SerializeField] private int atlasHeight = 512;                         // 纹理图集高度
+    [SerializeField] private GlyphRenderMode renderMode = GlyphRenderMode.SDFAA; // 渲染模式
+    
+    // 自动应用设置
+    [SerializeField] private bool applyToAllTextsOnStart = true;            // 启动时自动应用到所有文本
+    [SerializeField] private bool setAsDefaultFont = true;                  // 设置为默认字体（仅日志，实际只读）
+    
+    // 核心接口
+    public TMP_FontAsset DynamicFont { get; }                              // 获取动态字体资源（懒加载）
+    public void ApplyFontToAllTexts()                                       // 应用到所有TextMeshProUGUI组件
+    public void ApplyFontToText(TextMeshProUGUI textComponent)             // 应用到指定文本组件
+    public void SetAsDefaultFont()                                         // 设置默认字体（仅日志）
+    public string GetMemoryInfo()                                           // 获取字体内存占用信息
+    public void ClearFont()                                                // 清理字体资源
+}
+```
+
+**接口说明**：
+- `DynamicFont`: 属性访问器，如果字体未创建则自动创建（懒加载）
+- `ApplyFontToAllTexts()`: 查找场景中所有TextMeshProUGUI组件并应用动态字体
+- `ApplyFontToText()`: 为指定的文本组件设置动态字体
+- `SetAsDefaultFont()`: 记录日志说明，实际无法在运行时修改TMP_Settings.defaultFontAsset（只读属性）
+- `GetMemoryInfo()`: 返回字体内存占用和已生成字符数的字符串信息
+- `ClearFont()`: 清理动态字体资源（谨慎使用，可能被其他对象引用）
+
+**初始化集成**：
+- 通过`GameInitializer.InitializeDynamicFont()`方法初始化
+- 字体加载器使用单例模式，通过`DontDestroyOnLoad`确保跨场景存在
+- 在`Start()`生命周期中自动创建字体并应用到所有文本组件
+
 ### 4.15 设置管理系统接口
 
 ```csharp
@@ -1696,6 +1798,8 @@ DoomsdaySSW4/
 │   ├── Scripts/
 │   │   ├── Core/           # 游戏核心逻辑
 │   │   │   ├── GameManager.cs
+│   │   │   ├── GameInitializer.cs
+│   │   │   ├── DynamicChineseFontLoader.cs
 │   │   │   ├── RuleEngine.cs
 │   │   │   └── StateManager.cs
 │   │   ├── Mining/          # 挖矿系统
@@ -1748,6 +1852,9 @@ DoomsdaySSW4/
 │   ├── Textures/           # 贴图
 │   ├── Audio/              # 音频资源
 │   └── Resources/          # 资源文件夹
+│       ├── Fonts/          # 字体文件目录
+│       │   ├── YaHei.ttf  # 微软雅黑（示例）
+│       │   └── SourceHanSans.ttf  # 思源黑体（示例）
 │       └── Localization/   # 本地化资源
 │           ├── zh-CN.json  # 简体中文
 │           ├── zh-TW.json  # 繁体中文
@@ -1826,6 +1933,53 @@ public enum ErrorType
     Critical
 }
 ```
+
+### 6.6 字体加载系统实现
+
+#### 6.6.1 实现方案
+
+**字体加载器组件**：
+- `DynamicChineseFontLoader` MonoBehaviour组件，负责动态字体的创建和管理
+- 使用TextMeshPro的`TMP_FontAsset.CreateFontAsset()`方法创建动态字体资源
+- 需要`using UnityEngine.TextCore.LowLevel;`命名空间以使用`GlyphRenderMode`枚举
+
+**初始化时机**：
+- 在`GameInitializer.InitializeDynamicFont()`方法中初始化
+- 字体加载器在`Start()`生命周期中自动创建字体并应用到所有文本组件
+- 使用单例模式，通过`DontDestroyOnLoad`确保跨场景存在
+
+**资源加载**：
+- 使用Unity Resources系统加载源字体文件：`Resources.Load<Font>(sourceFontPath)`
+- 字体文件必须放在`Assets/Resources/Fonts/`目录下
+- 路径格式：不含扩展名，如`Fonts/YaHei`而不是`Fonts/YaHei.ttf`
+
+**字体应用**：
+- 通过`FindObjectsOfType<TextMeshProUGUI>(true)`查找所有文本组件
+- 自动为所有TextMeshProUGUI组件设置动态字体
+- 支持手动为指定文本组件应用字体
+
+#### 6.6.2 项目结构
+
+```
+Assets/
+├── Scripts/
+│   └── Core/
+│       ├── DynamicChineseFontLoader.cs    # 动态字体加载器
+│       └── GameInitializer.cs             # 游戏初始化器（集成字体初始化）
+└── Resources/
+    └── Fonts/                              # 字体文件目录
+        ├── YaHei.ttf                      # 微软雅黑（示例）
+        └── SourceHanSans.ttf              # 思源黑体（示例）
+```
+
+#### 6.6.3 技术要点
+
+- **TextMeshPro版本要求**：使用TextMeshPro 3.0+的动态字体功能
+- **Unity版本要求**：支持Unity 2018.1+版本
+- **字体文件导入**：字体文件需要正确导入Unity（检查Inspector中的导入设置）
+- **性能考虑**：动态字体首次显示字符时可能有短暂延迟（<100ms），这是按需生成的正常行为
+- **内存管理**：动态字体按需生成字符，初始内存占用小，随使用字符数量增长
+- **命名空间依赖**：需要`using UnityEngine.TextCore.LowLevel;`以使用`GlyphRenderMode`枚举类型
 
 ### 6.5 测试策略
 
@@ -2166,6 +2320,12 @@ UI系统
      - 攻击范围计算：以钻头中心为基准，计算矩形攻击区域（minX, maxX, minY, maxY）
      - 高亮更新：地图更新时自动刷新高亮状态，钻头范围变化时也会自动更新
      - 高亮配置：可通过MiningMapView组件的Inspector配置高亮颜色、变暗透明度、是否启用高亮
+  - **挖矿地图颜色规则（硬度渐变）**：
+    - 矿石格子颜色与当前硬度关联
+    - 渐变范围：硬度最低颜色 `#E3C176` → 硬度最高颜色 `#4F411F`
+    - 归一化方式：按当前层矿石格子的最小/最大硬度进行线性归一化
+    - 边界处理：当无矿石或最小值等于最大值时，使用最低硬度颜色
+    - 未来扩展：后续由配置表控制不同硬度区间的颜色映射（替代线性渐变）
 
 3. **任务规则（债务偿还规则）**
    - 每个任务就是要求在限定回合数内偿还指定金额的债务
@@ -2215,11 +2375,26 @@ UI系统
      - 使用CanvasKeeper组件确保Canvas在Awake、OnEnable、Start、Update等生命周期中保持激活
      - 当Canvas被意外禁用时，自动在下一帧重新激活（通过协程实现）
      - 防止在退出Play模式时触发协程错误（检查Application.isPlaying和gameObject.activeInHierarchy）
-   - **字体显示规则**：
-     - 使用TextMeshPro进行文本渲染，支持中文字体
-     - 自动加载中文字体资源（从Resources目录）
-     - 支持运行时动态设置字体（GameScreen、MiningMapView等组件）
-     - 字体资源必须包含中文字符查找表（characterLookupTable）
+   - **动态字体加载规则**：
+     - **字体加载方式**：使用TextMeshPro动态字体模式（AtlasPopulationMode.Dynamic）
+     - **按需生成**：字体资源创建时纹理图集为空，当文本显示新字符时Unity自动生成到纹理图集
+     - **内存优化**：初始内存占用最小（~0.5-1MB），随使用字符数量逐渐增长
+     - **字体文件位置**：源字体文件必须放在 `Assets/Resources/Fonts/` 目录下
+     - **字体路径配置**：使用Resources路径格式，不含扩展名（如：`Fonts/YaHei`）
+     - **自动应用**：启动时自动查找所有TextMeshProUGUI组件并应用动态字体
+     - **单例管理**：DynamicChineseFontLoader使用单例模式，DontDestroyOnLoad确保跨场景存在
+     - **内存监控**：提供GetMemoryInfo()方法监控字体内存占用和已生成字符数
+     - **默认字体限制**：TMP_Settings.defaultFontAsset是只读属性，无法在运行时修改，通过ApplyFontToAllTexts()实现实际效果
+     - **字体配置参数**：
+       - 采样点大小（samplingPointSize）：默认64，降低可节省约30%内存
+       - 纹理图集尺寸（atlasWidth/Height）：默认512x512，降低可节省约75%内存
+       - 渲染模式（renderMode）：默认SDFAA（Signed Distance Field Anti-Aliasing）
+       - 字符间距（padding）：默认9像素
+     - **内存占用对比**：
+       - 动态字体（方案A）：初始~0.5-1MB，使用100个中文字符后~3-8MB
+       - 静态字体（最小字符集）：~2-5MB
+       - 静态字体（常用字符集）：~10-30MB
+       - 静态字体（完整字符集）：~50-200MB
   - **升级界面背景图规则**：
     - UpgradeSelectionScreen 的 BackgroundImage 始终保持激活状态
     - BackgroundImage 不随三选一面板的显示/隐藏切换激活状态
@@ -2596,6 +2771,7 @@ string text = LocalizationManager.Instance.GetLocalizedString("ui.menu.start");
 | - | 1.7 | 添加分辨率设置和本地化系统：支持预设/自定义分辨率、全屏模式切换，支持简体中文、繁体中文、英文三种语言 | - |
 | - | 1.8 | 更新挖矿地图尺寸：从9x7改为9x9网格，钻头中心点从(4,3)更新为(4,4) | - |
 | - | 1.9 | 添加挖矿地图高亮规则：在攻击范围内的格子高亮显示，范围外的格子变暗显示；添加UI自适应规则、Canvas保持激活规则、字体显示规则 | - |
+| - | 1.10 | 添加动态中文字体加载系统：实现按需生成字符的动态字体模式，支持内存优化配置，集成到GameInitializer初始化流程，添加字体管理模块和完整API接口 | - |
 
 ---
 

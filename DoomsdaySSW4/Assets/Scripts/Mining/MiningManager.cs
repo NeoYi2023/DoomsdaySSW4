@@ -357,6 +357,58 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 获取将要被攻击的格子列表（不造成伤害，用于动效）
+    /// </summary>
+    public List<AttackedTileInfo> GetTilesToAttack(DrillData drill, int layerDepth)
+    {
+        List<AttackedTileInfo> tilesToAttack = new List<AttackedTileInfo>();
+        
+        if (_miningData == null || drill == null)
+        {
+            return tilesToAttack;
+        }
+
+        MiningLayerData layer = GetLayer(layerDepth);
+        if (layer == null)
+        {
+            return tilesToAttack;
+        }
+
+        Vector2Int drillCenter = layer.drillCenter;
+        Vector2Int range = drill.GetEffectiveRange();
+        int attackValue = drill.GetEffectiveStrength();
+
+        // 计算攻击范围（以钻头中心为基准）
+        int halfRangeX = range.x / 2;
+        int halfRangeY = range.y / 2;
+
+        int minX = Mathf.Max(0, drillCenter.x - halfRangeX);
+        int maxX = Mathf.Min(LAYER_WIDTH - 1, drillCenter.x + halfRangeX);
+        int minY = Mathf.Max(0, drillCenter.y - halfRangeY);
+        int maxY = Mathf.Min(LAYER_HEIGHT - 1, drillCenter.y + halfRangeY);
+
+        // 遍历范围内的所有格子，只记录不造成伤害
+        for (int x = minX; x <= maxX; x++)
+        {
+            for (int y = minY; y <= maxY; y++)
+            {
+                MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == x && t.y == y);
+                if (tile == null || tile.tileType != TileType.Ore || tile.isMined)
+                    continue;
+
+                // 只记录要攻击的格子信息，不造成伤害
+                tilesToAttack.Add(new AttackedTileInfo
+                {
+                    position = new Vector2Int(x, y),
+                    attackStrength = attackValue
+                });
+            }
+        }
+
+        return tilesToAttack;
+    }
+
+    /// <summary>
     /// 攻击范围内的矿石（每回合执行）
     /// </summary>
     public MiningResult AttackOresInRange(DrillData drill, int layerDepth)
@@ -408,6 +460,13 @@ public class MiningManager : MonoBehaviour
                 // 对矿石造成伤害
                 tile.hardness -= attackValue;
 
+                // 记录被攻击的格子信息（用于动效）
+                result.attackedTiles.Add(new AttackedTileInfo
+                {
+                    position = new Vector2Int(x, y),
+                    attackStrength = attackValue
+                });
+
                 // 如果硬度归零，挖掉矿石
                 if (tile.hardness <= 0)
                 {
@@ -452,6 +511,7 @@ public class MiningManager : MonoBehaviour
                 }
             }
         }
+
 
         return result;
     }
@@ -638,6 +698,16 @@ public class MiningManager : MonoBehaviour
 }
 
 /// <summary>
+/// 被攻击的格子信息（用于动效）
+/// </summary>
+[System.Serializable]
+public class AttackedTileInfo
+{
+    public Vector2Int position;       // 格子坐标
+    public int attackStrength;       // 攻击强度值
+}
+
+/// <summary>
 /// 挖矿结果
 /// </summary>
 [System.Serializable]
@@ -648,4 +718,5 @@ public class MiningResult
     public int moneyGained;
     public int energyGained;
     public List<OreData> partiallyDamagedOres = new List<OreData>();
+    public List<AttackedTileInfo> attackedTiles = new List<AttackedTileInfo>(); // 被攻击的格子信息（用于动效）
 }

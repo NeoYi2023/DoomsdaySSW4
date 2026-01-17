@@ -1,7 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// 挖矿地图视图：显示9x9的挖矿地图
@@ -26,10 +28,23 @@ public class MiningMapView : MonoBehaviour
     private RectTransform _containerRectTransform;
     private RectTransform _parentRectTransform;
     
+    [Header("晃动动效设置")]
+    [SerializeField] private float shakeDuration = 0.5f; // 晃动持续时间（秒）
+    [SerializeField] private float shakeAmplitude = 4.8f; // 晃动幅度（像素）
+    [SerializeField] private float shakeFrequency = 12f; // 晃动频率（次/秒）
+    private Dictionary<Vector2Int, Vector2> _originalPositions = new Dictionary<Vector2Int, Vector2>(); // 存储格子的原始位置
+    private List<Coroutine> _activeShakeCoroutines = new List<Coroutine>(); // 当前活动的晃动协程
+    
     [Header("高亮设置")]
     [SerializeField] private bool enableHighlight = true; // 是否启用高亮
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 0.5f, 1f); // 高亮颜色（淡黄色）
     [SerializeField] private float dimmedAlpha = 0.3f; // 变暗的透明度
+    
+    [Header("硬度颜色设置")]
+    [SerializeField] private Color lowHardnessColor = new Color32(0xE3, 0xC1, 0x76, 0xFF); // 硬度最低颜色
+    [SerializeField] private Color highHardnessColor = new Color32(0x4F, 0x41, 0x1F, 0xFF); // 硬度最高颜色
+    private int _minOreHardness = 0;
+    private int _maxOreHardness = 0;
 
     // 矿石颜色映射
     private readonly Dictionary<MineralType, Color> _oreColors = new Dictionary<MineralType, Color>
@@ -174,21 +189,23 @@ public class MiningMapView : MonoBehaviour
     /// </summary>
     private void LoadChineseFont()
     {
-        // 尝试从Resources加载中文字体（可能的名称）
-        string[] possibleFontNames = {
-            "Fonts & Materials/微软雅黑 SDF",
-            "Fonts & Materials/Microsoft YaHei SDF",
-            "Fonts & Materials/ChineseFont SDF",
-            "Fonts & Materials/YaHei SDF"
-        };
-
-        foreach (string fontName in possibleFontNames)
+        // 使用动态字体加载器获取字体
+        DynamicChineseFontLoader fontLoader = FindObjectOfType<DynamicChineseFontLoader>();
+        if (fontLoader != null)
         {
-            _chineseFont = Resources.Load<TMP_FontAsset>(fontName);
+            _chineseFont = fontLoader.DynamicFont;
             if (_chineseFont != null)
             {
-                break;
+                Debug.Log($"MiningMapView: 已从动态字体加载器获取字体: {_chineseFont.name}");
             }
+            else
+            {
+                Debug.LogWarning("MiningMapView: 动态字体加载器存在但字体未创建");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("MiningMapView: 未找到 DynamicChineseFontLoader，字体可能未初始化");
         }
     }
 
@@ -220,6 +237,9 @@ public class MiningMapView : MonoBehaviour
 
         // 清除旧的瓦片（会同时清除映射）
         ClearTiles();
+
+        // 更新当前层矿石硬度范围（用于颜色渐变）
+        UpdateOreHardnessRange(grid);
 
         // 创建新的瓦片
         for (int y = MiningManager.LAYER_HEIGHT - 1; y >= 0; y--) // 从下往上显示
@@ -274,11 +294,8 @@ public class MiningMapView : MonoBehaviour
             text.alignment = TextAlignmentOptions.Center;
             text.color = Color.white;
             
-            // 如果已加载中文字体，应用它
-            if (_chineseFont != null)
-            {
-                text.font = _chineseFont;
-            }
+            // 应用动态字体
+            FontHelper.ApplyFontToText(text);
         }
 
         _tileObjects.Add(tileObj);
@@ -338,14 +355,61 @@ public class MiningMapView : MonoBehaviour
             case TileType.Rock:
                 return new Color(0.4f, 0.4f, 0.4f); // 岩石：灰色
             case TileType.Ore:
-                if (_oreColors.TryGetValue(tileData.mineralType, out Color color))
-                {
-                    return color;
-                }
-                return Color.white; // 默认白色
+                return GetHardnessGradientColor(tileData.hardness);
             default:
                 return Color.gray;
         }
+    }
+
+    /// <summary>
+    /// 根据当前层矿石硬度范围计算颜色渐变
+    /// </summary>
+    private Color GetHardnessGradientColor(int hardness)
+    {
+        if (_maxOreHardness <= _minOreHardness)
+        {
+            return lowHardnessColor;
+        }
+
+        float t = (hardness - _minOreHardness) / (float)(_maxOreHardness - _minOreHardness);
+        t = Mathf.Clamp01(t);
+        return Color.Lerp(lowHardnessColor, highHardnessColor, t);
+    }
+
+    /// <summary>
+    /// 计算当前层矿石硬度范围
+    /// </summary>
+    private void UpdateOreHardnessRange(MiningTileData[,] grid)
+    {
+        int minHardness = int.MaxValue;
+        int maxHardness = int.MinValue;
+        bool hasOre = false;
+
+        for (int x = 0; x < grid.GetLength(0); x++)
+        {
+            for (int y = 0; y < grid.GetLength(1); y++)
+            {
+                MiningTileData tile = grid[x, y];
+                if (tile.tileType != TileType.Ore || tile.isMined)
+                {
+                    continue;
+                }
+
+                hasOre = true;
+                if (tile.hardness < minHardness) minHardness = tile.hardness;
+                if (tile.hardness > maxHardness) maxHardness = tile.hardness;
+            }
+        }
+
+        if (!hasOre)
+        {
+            _minOreHardness = 0;
+            _maxOreHardness = 0;
+            return;
+        }
+
+        _minOreHardness = minHardness;
+        _maxOreHardness = maxHardness;
     }
 
     /// <summary>
@@ -475,5 +539,218 @@ public class MiningMapView : MonoBehaviour
         {
             UpdateHighlight();
         }
+    }
+
+    /// <summary>
+    /// 播放晃动动画
+    /// </summary>
+    /// <param name="attackedTiles">被攻击的格子信息列表</param>
+    /// <returns>协程，用于等待动画完成</returns>
+    public IEnumerator PlayShakeAnimation(List<AttackedTileInfo> attackedTiles)
+    {
+        if (attackedTiles == null || attackedTiles.Count == 0)
+        {
+            yield break;
+        }
+
+        // 停止所有正在进行的晃动动画
+        StopAllShakeAnimations();
+
+        // 按攻击强度分组格子
+        var tilesByStrength = attackedTiles
+            .GroupBy(t => t.attackStrength)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // 为每组启动同步的晃动协程
+        List<Coroutine> coroutines = new List<Coroutine>();
+        foreach (var group in tilesByStrength)
+        {
+            int strength = group.Key;
+            List<AttackedTileInfo> tiles = group.Value;
+            
+            // 保存坐标列表而不是GameObject引用（因为UpdateMap可能会重建格子）
+            List<Vector2Int> tilePositions = new List<Vector2Int>();
+            foreach (var tileInfo in tiles)
+            {
+                tilePositions.Add(tileInfo.position);
+            }
+
+            if (tilePositions.Count > 0)
+            {
+                Coroutine coroutine = StartCoroutine(ShakeTilesCoroutine(tilePositions, strength));
+                coroutines.Add(coroutine);
+                _activeShakeCoroutines.Add(coroutine);
+            }
+        }
+
+        // 等待所有协程完成
+        foreach (var coroutine in coroutines)
+        {
+            yield return coroutine;
+        }
+    }
+
+    /// <summary>
+    /// 停止所有晃动动画
+    /// </summary>
+    private void StopAllShakeAnimations()
+    {
+        foreach (var coroutine in _activeShakeCoroutines)
+        {
+            if (coroutine != null)
+            {
+                StopCoroutine(coroutine);
+            }
+        }
+        _activeShakeCoroutines.Clear();
+
+        // 恢复所有格子的原始位置
+        foreach (var kvp in _originalPositions)
+        {
+            if (_tileMap.TryGetValue(kvp.Key, out GameObject tileObj) && tileObj != null)
+            {
+                RectTransform rect = tileObj.GetComponent<RectTransform>();
+                if (rect != null)
+                {
+                    rect.anchoredPosition = kvp.Value;
+                }
+            }
+        }
+        _originalPositions.Clear();
+    }
+
+    /// <summary>
+    /// 晃动协程
+    /// </summary>
+    /// <param name="tilePositions">要晃动的格子坐标列表</param>
+    /// <param name="strength">攻击强度值（用于生成一致的随机参数）</param>
+    private IEnumerator ShakeTilesCoroutine(List<Vector2Int> tilePositions, int strength)
+    {
+        if (tilePositions == null || tilePositions.Count == 0)
+        {
+            yield break;
+        }
+
+        bool wasGridLayoutEnabled = false;
+        if (gridLayout != null)
+        {
+            wasGridLayoutEnabled = gridLayout.enabled;
+            gridLayout.enabled = false; // 暂停布局，避免覆盖位置偏移
+        }
+
+        // 保存原始位置（使用坐标作为key，因为GameObject可能被重建）
+        Dictionary<Vector2Int, Vector2> originalPositions = new Dictionary<Vector2Int, Vector2>();
+        Dictionary<Vector2Int, Vector2> shakeDirections = new Dictionary<Vector2Int, Vector2>();
+        int rectTransformCount = 0;
+        
+        foreach (var pos in tilePositions)
+        {
+            // 从_tileMap中查找GameObject（每次循环都重新查找，因为可能被重建）
+            if (_tileMap.TryGetValue(pos, out GameObject tile) && tile != null)
+            {
+                RectTransform rect = tile.GetComponent<RectTransform>();
+                if (rect != null)
+                {
+                    originalPositions[pos] = rect.anchoredPosition;
+                    _originalPositions[pos] = rect.anchoredPosition;
+                    rectTransformCount++;
+                    
+                    // 使用强度值和格子位置生成一致的随机方向
+                    int seed = strength * 1000 + pos.x * 100 + pos.y;
+                    System.Random tileRandom = new System.Random(seed);
+                    float angle = (float)(tileRandom.NextDouble() * 2 * Mathf.PI);
+                    shakeDirections[pos] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                }
+            }
+        }
+
+        float startTime = Time.time; // 记录开始时间
+        while (true)
+        {
+            float elapsedTime = Time.time - startTime; // 使用绝对时间计算，避免累积误差
+            if (elapsedTime >= shakeDuration)
+            {
+                break; // 动画结束
+            }
+            
+            float progress = elapsedTime / shakeDuration; // progress在0-1之间
+            
+            // 使用缓入缓出的动画曲线
+            float curveValue = Mathf.SmoothStep(0f, 1f, progress);
+            // 使用正弦波实现晃动效果
+            float shakeValue = Mathf.Sin(elapsedTime * shakeFrequency * Mathf.PI * 2) * (1f - curveValue);
+            float currentAmplitude = shakeAmplitude * (1f - curveValue); // 逐渐减小幅度
+
+            // 更新每个格子的位置（使用坐标从_tileMap重新查找GameObject）
+            foreach (var pos in tilePositions)
+            {
+                // 每次循环都重新从_tileMap查找（因为UpdateMap可能重建了格子）
+                if (!_tileMap.TryGetValue(pos, out GameObject tile) || tile == null)
+                {
+                    continue;
+                }
+                
+                if (!originalPositions.ContainsKey(pos))
+                {
+                    continue;
+                }
+                
+                RectTransform rect = tile.GetComponent<RectTransform>();
+                if (rect == null)
+                {
+                    continue;
+                }
+                
+                if (!shakeDirections.ContainsKey(pos))
+                {
+                    continue;
+                }
+                
+                Vector2 offset = shakeDirections[pos] * shakeValue * currentAmplitude;
+                rect.anchoredPosition = originalPositions[pos] + offset;
+            }
+
+            yield return null;
+        }
+
+        if (gridLayout != null)
+        {
+            gridLayout.enabled = wasGridLayoutEnabled; // 恢复布局状态
+        }
+
+        // 恢复原始位置（使用坐标从_tileMap重新查找GameObject）
+        foreach (var pos in tilePositions)
+        {
+            if (originalPositions.ContainsKey(pos))
+            {
+                // 从_tileMap重新查找（因为可能被重建）
+                if (_tileMap.TryGetValue(pos, out GameObject tile) && tile != null)
+                {
+                    RectTransform rect = tile.GetComponent<RectTransform>();
+                    if (rect != null)
+                    {
+                        rect.anchoredPosition = originalPositions[pos];
+                    }
+                }
+            }
+            
+            // 从全局字典中移除
+            _originalPositions.Remove(pos);
+        }
+    }
+
+    /// <summary>
+    /// 获取格子的坐标位置
+    /// </summary>
+    private Vector2Int GetTilePosition(GameObject tile)
+    {
+        foreach (var kvp in _tileMap)
+        {
+            if (kvp.Value == tile)
+            {
+                return kvp.Key;
+            }
+        }
+        return Vector2Int.one * -1; // 返回无效位置
     }
 }

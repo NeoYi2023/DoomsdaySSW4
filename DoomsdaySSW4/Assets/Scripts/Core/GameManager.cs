@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Events;
+using System.Collections;
 
 /// <summary>
 /// 游戏主管理器：整合所有系统、管理游戏流程
@@ -39,6 +40,8 @@ public class GameManager : MonoBehaviour
     public UnityEvent OnGameOver = new UnityEvent();
     public UnityEvent OnVictory = new UnityEvent();
     public UnityEvent OnGameStateChanged = new UnityEvent(); // 游戏状态变化事件（用于UI更新）
+    public UnityEvent OnTurnProcessingStarted = new UnityEvent(); // 回合处理开始（动画开始）
+    public UnityEvent OnTurnProcessingCompleted = new UnityEvent(); // 回合处理完成（动画结束）
 
     private void Awake()
     {
@@ -140,7 +143,22 @@ public class GameManager : MonoBehaviour
         if (!_isGameInitialized || _isGamePaused)
             return;
 
-        _turnManager.EndTurn();
+        // 通知UI禁用按钮（动画期间）
+        OnTurnProcessingStarted?.Invoke();
+        
+        // 启动协程处理回合结束逻辑
+        StartCoroutine(ProcessEndTurnCoroutine());
+    }
+
+    /// <summary>
+    /// 处理回合结束的协程
+    /// </summary>
+    private IEnumerator ProcessEndTurnCoroutine()
+    {
+        yield return _turnManager.EndTurnCoroutine();
+        
+        // 通知UI重新启用按钮（动画完成）
+        OnTurnProcessingCompleted?.Invoke();
     }
 
     /// <summary>

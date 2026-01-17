@@ -28,6 +28,12 @@ public class LocalizedText : MonoBehaviour
 
     private void Start()
     {
+        // 应用动态字体（如果是TextMeshPro组件）
+        if (_tmpComponent != null)
+        {
+            FontHelper.ApplyFontToText(_tmpComponent);
+        }
+        
         UpdateText();
         
         // 订阅语言变更事件

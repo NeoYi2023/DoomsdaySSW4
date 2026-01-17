@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events;
+using System.Collections;
+using System.Collections.Generic;
 
 /// <summary>
 /// 回合管理器：负责回合循环、回合限制检查
@@ -76,9 +78,9 @@ public class TurnManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 结束当前回合
+    /// 结束当前回合（协程版本，支持等待动画完成）
     /// </summary>
-    public void EndTurn()
+    public IEnumerator EndTurnCoroutine()
     {
         if (_currentTurn == 0)
         {
@@ -88,15 +90,31 @@ public class TurnManager : MonoBehaviour
 
         Debug.Log($"回合 {_currentTurn} 结束，开始执行挖矿逻辑");
 
-        // 执行挖矿（攻击范围内的矿石）
+        // 先获取要攻击的格子列表（不造成伤害，用于动效）
         DrillData drill = _drillManager.GetCurrentDrill();
+        MiningResult result = null;
         if (drill != null)
         {
             MiningData miningData = _miningManager.GetMiningData();
             if (miningData != null)
             {
                 int currentLayerDepth = miningData.currentDepth >= 1 ? miningData.currentDepth : 1;
-                MiningResult result = _miningManager.AttackOresInRange(drill, currentLayerDepth);
+                
+                // 先获取要攻击的格子列表（不造成伤害）
+                List<AttackedTileInfo> tilesToAttack = _miningManager.GetTilesToAttack(drill, currentLayerDepth);
+                
+                // 播放晃动动画（如果有要攻击的格子）
+                if (tilesToAttack != null && tilesToAttack.Count > 0)
+                {
+                    MiningMapView miningMapView = FindObjectOfType<MiningMapView>();
+                    if (miningMapView != null)
+                    {
+                        yield return miningMapView.PlayShakeAnimation(tilesToAttack);
+                    }
+                }
+                
+                // 动画完成后，执行实际的挖矿逻辑（造成伤害）
+                result = _miningManager.AttackOresInRange(drill, currentLayerDepth);
                 
                 // 应用矿石发现能力加成（每回合额外发现矿石）
                 if (_energyManager != null)
@@ -110,7 +128,7 @@ public class TurnManager : MonoBehaviour
                 }
 
                 // 处理挖矿结果
-                if (result.moneyGained > 0 || result.energyGained > 0)
+                if (result != null && (result.moneyGained > 0 || result.energyGained > 0))
                 {
                     Debug.Log($"本回合挖矿结果: 金钱 +{result.moneyGained}, 能源 +{result.energyGained}");
 
@@ -172,6 +190,14 @@ public class TurnManager : MonoBehaviour
         {
             Debug.LogWarning($"已达到回合限制: {_maxTurns}");
         }
+    }
+
+    /// <summary>
+    /// 结束当前回合（保持向后兼容，内部调用协程版本）
+    /// </summary>
+    public void EndTurn()
+    {
+        StartCoroutine(EndTurnCoroutine());
     }
 
     /// <summary>

@@ -7,6 +7,11 @@ public class GameInitializer : MonoBehaviour
 {
     [Header("初始化设置")]
     [SerializeField] private bool initializeOnStart = true;
+    
+    [Header("字体加载")]
+    [SerializeField] private bool initializeFontOnStart = true;
+
+    private DynamicChineseFontLoader _fontLoader;
 
     private void Start()
     {
@@ -31,11 +36,47 @@ public class GameInitializer : MonoBehaviour
         Debug.Log($"当前分辨率: {Screen.width}x{Screen.height}, 全屏: {Screen.fullScreen}");
         Debug.Log($"当前语言: {localizationManager.GetCurrentLanguage()}");
 
+        // 初始化动态中文字体（优先初始化，确保字体在 UI 组件之前创建）
+        if (initializeFontOnStart)
+        {
+            InitializeDynamicFont();
+        }
+
         // 初始化游戏管理器并开始新游戏
         GameManager gameManager = GameManager.Instance;
         if (gameManager != null && !gameManager.IsGameInitialized())
         {
             gameManager.StartNewGame();
+        }
+    }
+
+    /// <summary>
+    /// 初始化动态中文字体
+    /// </summary>
+    private void InitializeDynamicFont()
+    {
+        // 检查是否已存在字体加载器
+        _fontLoader = FindObjectOfType<DynamicChineseFontLoader>();
+        
+        if (_fontLoader == null)
+        {
+            // 创建字体加载器 GameObject
+            GameObject fontLoaderGO = new GameObject("DynamicChineseFontLoader");
+            _fontLoader = fontLoaderGO.AddComponent<DynamicChineseFontLoader>();
+            
+            // 立即创建字体，不等待 Start()，确保字体在 UI 组件 Start() 之前创建
+            _fontLoader.CreateDynamicFont();
+            
+            Debug.Log("动态中文字体加载器已创建并初始化");
+        }
+        else
+        {
+            // 如果已存在，确保字体已创建
+            if (_fontLoader.DynamicFont == null)
+            {
+                _fontLoader.CreateDynamicFont();
+            }
+            Debug.Log("动态中文字体加载器已存在");
         }
     }
 

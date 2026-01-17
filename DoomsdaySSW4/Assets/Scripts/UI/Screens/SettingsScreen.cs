@@ -43,6 +43,9 @@ public class SettingsScreen : MonoBehaviour
         InitializeUI();
         LoadCurrentSettings();
         SetupEventListeners();
+        
+        // 应用动态字体
+        ApplyDynamicFont();
     }
 
     /// <summary>
@@ -314,5 +317,13 @@ public class SettingsScreen : MonoBehaviour
     {
         // 恢复原始设置
         LoadCurrentSettings();
+    }
+
+    /// <summary>
+    /// 应用动态字体到所有文本组件
+    /// </summary>
+    private void ApplyDynamicFont()
+    {
+        FontHelper.ApplyFontToGameObject(gameObject);
     }
 }
