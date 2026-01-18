@@ -3,6 +3,8 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System;
 
 /// <summary>
 /// 设置界面：管理分辨率设置和语言设置的UI
@@ -19,12 +21,17 @@ public class SettingsScreen : MonoBehaviour
     [Header("语言设置")]
     [SerializeField] private TMP_Dropdown languageDropdown;
 
+    [Header("UI组件")]
+    [SerializeField] private GameObject panel;
+
     [Header("按钮")]
     [SerializeField] private Button applyButton;
     [SerializeField] private Button cancelButton;
+    [SerializeField] private Button closeButton;
 
     private SettingsManager _settingsManager;
     private LocalizationManager _localizationManager;
+    private const string DebugLogPath = @"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log";
 
     // 临时设置（应用前不生效）
     private int _tempWidth;
@@ -40,6 +47,62 @@ public class SettingsScreen : MonoBehaviour
 
     private void Start()
     {
+        // 如果panel未设置，尝试自动查找
+        if (panel == null)
+        {
+            // 优先查找名为"Panel"的直接子对象
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                Transform child = transform.GetChild(i);
+                if (child.name == "Panel")
+                {
+                    panel = child.gameObject;
+                    break;
+                }
+            }
+
+            // 如果找不到名为"Panel"的对象，尝试查找包含Image组件的子对象
+            if (panel == null)
+            {
+                for (int i = 0; i < transform.childCount; i++)
+                {
+                    Transform child = transform.GetChild(i);
+                    UnityEngine.UI.Image imageComponent = child.GetComponent<UnityEngine.UI.Image>();
+                    if (imageComponent != null)
+                    {
+                        panel = imageComponent.gameObject;
+                        Debug.LogWarning($"SettingsScreen: 未找到名为'Panel'的直接子对象，使用找到的Image组件 '{panel.name}' 作为panel。建议在Inspector中正确设置Panel字段。");
+                        break;
+                    }
+                }
+            }
+
+            // 如果仍然找不到，使用当前GameObject
+            if (panel == null)
+            {
+                panel = gameObject;
+                Debug.LogWarning($"SettingsScreen: 未找到Panel，使用当前GameObject '{gameObject.name}' 作为panel。");
+            }
+        }
+
+        // 初始化时隐藏panel
+        if (panel != null)
+        {
+            Canvas panelCanvas = panel.GetComponent<Canvas>();
+            bool panelIsCanvas = panelCanvas != null;
+            
+            if (!panelIsCanvas)
+            {
+                panel.SetActive(false);
+            }
+            else
+            {
+                Debug.LogWarning("SettingsScreen: panel被识别为Canvas，不会在初始化时禁用它。请确保SettingsScreen组件附加在Canvas的子对象上，而不是Canvas本身。");
+            }
+        }
+        string panelResolvedData = $"{{\"panelNull\":{(panel == null).ToString().ToLowerInvariant()},\"panelName\":\"{EscapeJson(panel != null ? panel.name : string.Empty)}\",\"panelActive\":{(panel != null && panel.activeSelf).ToString().ToLowerInvariant()}}}";
+        DebugLog("H3", "SettingsScreen.cs:90", "Panel resolved in Start", panelResolvedData);
+
         InitializeUI();
         LoadCurrentSettings();
         SetupEventListeners();
@@ -210,6 +273,12 @@ public class SettingsScreen : MonoBehaviour
         {
             cancelButton.onClick.AddListener(OnCancelButtonClicked);
         }
+
+        // 关闭按钮
+        if (closeButton != null)
+        {
+            closeButton.onClick.AddListener(OnCloseButtonClicked);
+        }
     }
 
     /// <summary>
@@ -317,6 +386,77 @@ public class SettingsScreen : MonoBehaviour
     {
         // 恢复原始设置
         LoadCurrentSettings();
+        // 关闭界面
+        Hide();
+    }
+
+    /// <summary>
+    /// 关闭按钮点击
+    /// </summary>
+    private void OnCloseButtonClicked()
+    {
+        Hide();
+    }
+
+    /// <summary>
+    /// 显示设置界面
+    /// </summary>
+    public void Show()
+    {
+        DebugLog("H4", "SettingsScreen.cs:346", "Show called", $"{{\"panelNull\":{(panel == null).ToString().ToLowerInvariant()},\"gameObjectActive\":{gameObject.activeSelf.ToString().ToLowerInvariant()}}}");
+        if (panel != null)
+        {
+            // 确保整个层级都是激活的（从根到panel）
+            Transform currentTransform = panel.transform;
+            while (currentTransform != null)
+            {
+                if (!currentTransform.gameObject.activeSelf)
+                {
+                    currentTransform.gameObject.SetActive(true);
+                }
+                currentTransform = currentTransform.parent;
+            }
+
+            // 确保GameObject本身是激活的（但只在panel不是gameObject本身时）
+            if (panel != gameObject && !gameObject.activeSelf)
+            {
+                gameObject.SetActive(true);
+            }
+
+            // 激活Panel
+            panel.SetActive(true);
+        }
+        else
+        {
+            // 备用方案：使用当前GameObject
+            gameObject.SetActive(true);
+        }
+
+        // 重新加载当前设置到UI
+        LoadCurrentSettings();
+    }
+
+    /// <summary>
+    /// 隐藏设置界面
+    /// </summary>
+    public void Hide()
+    {
+        if (panel != null)
+        {
+            Canvas panelCanvas = panel.GetComponent<Canvas>();
+            bool panelIsCanvas = panelCanvas != null;
+            
+            // 不禁用Canvas，只禁用Panel
+            if (!panelIsCanvas)
+            {
+                panel.SetActive(false);
+            }
+        }
+        else
+        {
+            // 备用方案：禁用当前GameObject
+            gameObject.SetActive(false);
+        }
     }
 
     /// <summary>
@@ -326,4 +466,17 @@ public class SettingsScreen : MonoBehaviour
     {
         FontHelper.ApplyFontToGameObject(gameObject);
     }
+
+    // #region agent log
+    private void DebugLog(string hypothesisId, string location, string message, string dataJson)
+    {
+        string line = $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"{hypothesisId}\",\"location\":\"{location}\",\"message\":\"{EscapeJson(message)}\",\"data\":{dataJson},\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+        File.AppendAllText(DebugLogPath, line + Environment.NewLine);
+    }
+
+    private static string EscapeJson(string value)
+    {
+        return string.IsNullOrEmpty(value) ? "" : value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
+    // #endregion
 }

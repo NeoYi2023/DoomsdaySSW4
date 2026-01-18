@@ -4,6 +4,8 @@ using TMPro;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System;
 
 /// <summary>
 /// 挖矿地图视图：显示9x9的挖矿地图
@@ -28,6 +30,8 @@ public class MiningMapView : MonoBehaviour
     private TMP_FontAsset _chineseFont;
     private RectTransform _containerRectTransform;
     private RectTransform _parentRectTransform;
+    private bool _loggedEmptyTileThisUpdate = false;
+    private const string DebugLogPath = @"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log";
     
     [Header("晃动动效设置")]
     [SerializeField] private float shakeDuration = 0.5f; // 晃动持续时间（秒）
@@ -203,6 +207,7 @@ public class MiningMapView : MonoBehaviour
     public void UpdateMap(int layerDepth)
     {
         _currentLayerDepth = layerDepth;
+        _loggedEmptyTileThisUpdate = false;
 
         if (_miningManager == null)
         {
@@ -223,8 +228,18 @@ public class MiningMapView : MonoBehaviour
             CalculateCellSize();
         }
 
+        if (gridLayout != null && !gridLayout.enabled)
+        {
+            string gridEnableData = $"{{\"wasEnabled\":false,\"cellSize\":\"{EscapeJson(gridLayout.cellSize.ToString())}\",\"spacing\":\"{EscapeJson(spacing.ToString())}\"}}";
+            DebugLog("H7", "MiningMapView.cs:230", "GridLayout re-enabled in UpdateMap", gridEnableData);
+            gridLayout.enabled = true;
+        }
+
         // 清除旧的瓦片（会同时清除映射）
         ClearTiles();
+
+        string updateMapData = $"{{\"layerDepth\":{layerDepth},\"gridLayoutEnabled\":{(gridLayout != null && gridLayout.enabled).ToString().ToLowerInvariant()},\"cellSize\":\"{EscapeJson(gridLayout != null ? gridLayout.cellSize.ToString() : string.Empty)}\",\"spacing\":\"{EscapeJson(spacing.ToString())}\",\"tilePrefabNull\":{(tilePrefab == null).ToString().ToLowerInvariant()}}}";
+        DebugLog("H5", "MiningMapView.cs:236", "UpdateMap begin", updateMapData);
 
         // 创建新的瓦片
         for (int y = MiningManager.LAYER_HEIGHT - 1; y >= 0; y--) // 从下往上显示
@@ -291,6 +306,14 @@ public class MiningMapView : MonoBehaviour
 
         // 更新瓦片显示（这会存储基础颜色）
         UpdateTileVisual(tileObj, tileData);
+
+        if (!_loggedEmptyTileThisUpdate && tileData.tileType == TileType.Empty)
+        {
+            RectTransform rect = tileObj.GetComponent<RectTransform>();
+            string emptyTileData = $"{{\"pos\":\"{EscapeJson(pos.ToString())}\",\"rectNull\":{(rect == null).ToString().ToLowerInvariant()},\"anchoredPos\":\"{EscapeJson(rect != null ? rect.anchoredPosition.ToString() : string.Empty)}\",\"parent\":\"{EscapeJson(tileObj.transform.parent != null ? tileObj.transform.parent.name : string.Empty)}\",\"gridLayoutEnabled\":{(gridLayout != null && gridLayout.enabled).ToString().ToLowerInvariant()}}}";
+            DebugLog("H6", "MiningMapView.cs:321", "First empty tile created", emptyTileData);
+            _loggedEmptyTileThisUpdate = true;
+        }
     }
 
     /// <summary>
@@ -691,4 +714,17 @@ public class MiningMapView : MonoBehaviour
         }
         return Vector2Int.one * -1; // 返回无效位置
     }
+
+    // #region agent log
+    private void DebugLog(string hypothesisId, string location, string message, string dataJson)
+    {
+        string line = $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"{hypothesisId}\",\"location\":\"{location}\",\"message\":\"{EscapeJson(message)}\",\"data\":{dataJson},\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+        File.AppendAllText(DebugLogPath, line + Environment.NewLine);
+    }
+
+    private static string EscapeJson(string value)
+    {
+        return string.IsNullOrEmpty(value) ? "" : value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
+    // #endregion
 }

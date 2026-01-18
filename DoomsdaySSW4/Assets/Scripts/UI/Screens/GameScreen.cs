@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using System.IO;
+using System;
 
 /// <summary>
 /// 游戏主界面：管理游戏UI显示和交互
@@ -28,6 +30,8 @@ public class GameScreen : MonoBehaviour
     private GameManager _gameManager;
     private MiningMapView _miningMapView;
     private UpgradeSelectionScreen _upgradeScreen;
+    private SettingsScreen _settingsScreen;
+    private const string DebugLogPath = @"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log";
 
     private void Awake()
     {
@@ -67,6 +71,25 @@ public class GameScreen : MonoBehaviour
                 _upgradeScreen.gameObject.SetActive(false);
             }
         }
+
+        // 查找设置界面（包含未激活对象）
+        SettingsScreen[] allSettingsScreens = Resources.FindObjectsOfTypeAll<SettingsScreen>();
+        _settingsScreen = null;
+        for (int i = 0; i < allSettingsScreens.Length; i++)
+        {
+            SettingsScreen candidate = allSettingsScreens[i];
+            if (candidate != null && candidate.gameObject.scene.IsValid())
+            {
+                _settingsScreen = candidate;
+                break;
+            }
+        }
+        if (_settingsScreen == null)
+        {
+            Debug.LogWarning("GameScreen: 未找到SettingsScreen，设置按钮可能无法正常工作。请确保场景中存在SettingsScreen GameObject。");
+        }
+        string settingsFindData = $"{{\"found\":{(_settingsScreen != null).ToString().ToLowerInvariant()},\"count\":{allSettingsScreens.Length},\"name\":\"{EscapeJson(_settingsScreen != null ? _settingsScreen.gameObject.name : string.Empty)}\",\"active\":{(_settingsScreen != null && _settingsScreen.gameObject.activeSelf).ToString().ToLowerInvariant()}}}";
+        DebugLog("H1", "GameScreen.cs:72", "SettingsScreen found in Start", settingsFindData);
 
         // 设置按钮事件
         if (endTurnButton != null)
@@ -381,9 +404,30 @@ public class GameScreen : MonoBehaviour
     /// </summary>
     private void OnSettingsButtonClicked()
     {
-        // 可以打开设置界面
-        Debug.Log("打开设置界面");
+        string settingsClickData = $"{{\"settingsScreenNull\":{(_settingsScreen == null).ToString().ToLowerInvariant()},\"name\":\"{EscapeJson(_settingsScreen != null ? _settingsScreen.gameObject.name : string.Empty)}\",\"active\":{(_settingsScreen != null && _settingsScreen.gameObject.activeSelf).ToString().ToLowerInvariant()}}}";
+        DebugLog("H2", "GameScreen.cs:400", "Settings button clicked", settingsClickData);
+        if (_settingsScreen != null)
+        {
+            _settingsScreen.Show();
+        }
+        else
+        {
+            Debug.LogWarning("GameScreen: SettingsScreen未找到，无法打开设置界面。");
+        }
     }
+
+    // #region agent log
+    private void DebugLog(string hypothesisId, string location, string message, string dataJson)
+    {
+        string line = $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"{hypothesisId}\",\"location\":\"{location}\",\"message\":\"{EscapeJson(message)}\",\"data\":{dataJson},\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+        File.AppendAllText(DebugLogPath, line + Environment.NewLine);
+    }
+
+    private static string EscapeJson(string value)
+    {
+        return string.IsNullOrEmpty(value) ? "" : value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
+    // #endregion
 
     /// <summary>
     /// 游戏初始化完成
