@@ -1,2 +1,0 @@
-drillId,drillName,miningStrength,miningRangeX,miningRangeY,description
-default_drill,默认钻头,10,5,5,默认钻头，攻击值10，范围5x5
