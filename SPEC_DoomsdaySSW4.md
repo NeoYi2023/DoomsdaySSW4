@@ -602,32 +602,105 @@ public class OreSpawnRule
 }
 ```
 
-### 3.11 钻头系统数据结构
+### 3.11 钻头造型系统数据结构
+
+钻头系统采用类似俄罗斯方块的造型机制，玩家可以在9x9钻机平台上拖拽、旋转和放置多个钻头造型。
+
+#### 3.11.1 核心概念
+
+- **钻机平台 (DrillPlatform)**：9x9的网格区域，与挖矿地图尺寸相同，玩家在此放置钻头造型
+- **钻头造型 (DrillShape)**：类似俄罗斯方块的形状，包含多个格子和特定的空间布局
+- **造型特性 (ShapeTrait)**：每个造型可拥有的初始或可激活Buff（如"挖掘a类矿石时+25%攻击"）
+- **攻击强度计算**：基础攻击强度 × 造型特性Buff × 挖矿船技能加成
+
+#### 3.11.2 钻头造型配置
+
+```csharp
+/// <summary>
+/// 钻头造型配置（从配置表加载）
+/// </summary>
+[System.Serializable]
+public class DrillShapeConfig
+{
+    public string shapeId;                    // 造型唯一ID
+    public string shapeName;                  // 造型名称
+    public int baseAttackStrength;            // 单格基础攻击强度
+    public List<Vector2Int> cells;            // 相对于锚点(0,0)的格子坐标列表
+    public List<ShapeTraitConfig> traits;     // 造型特性列表
+    public string description;                // 造型描述
+}
+
+/// <summary>
+/// 造型特性配置
+/// </summary>
+[System.Serializable]
+public class ShapeTraitConfig
+{
+    public string traitId;                    // 特性ID
+    public string traitName;                  // 特性名称
+    public string triggerCondition;           // 触发条件（如 "always", "ore_type:energy"）
+    public string effectType;                 // 效果类型（如 "attack_multiplier", "attack_add"）
+    public float effectValue;                 // 效果数值
+    public string description;                // 特性描述
+}
+```
+
+#### 3.11.3 已放置的造型实例
+
+```csharp
+/// <summary>
+/// 已放置在平台上的造型实例
+/// </summary>
+[System.Serializable]
+public class PlacedDrillShape
+{
+    public string instanceId;                 // 实例唯一ID
+    public string shapeId;                    // 引用的造型配置ID
+    public Vector2Int position;               // 在平台上的锚点位置
+    public int rotation;                      // 旋转状态（0/90/180/270度）
+    public List<string> activeTraits;         // 已激活的特性ID列表
+}
+```
+
+#### 3.11.4 钻机平台数据
+
+```csharp
+/// <summary>
+/// 钻机平台数据
+/// </summary>
+[System.Serializable]
+public class DrillPlatformData
+{
+    public const int PLATFORM_SIZE = 9;              // 平台尺寸（9x9）
+    public List<PlacedDrillShape> placedShapes;      // 已放置的造型列表
+    public List<string> availableShapeIds;           // 可用的造型ID列表（库存）
+}
+```
+
+#### 3.11.5 钻头数据（简化版）
 
 ```csharp
 [System.Serializable]
 public class DrillData
 {
     // 钻头基本信息
-    public string drillId;            // 钻头唯一标识（来自配置表）
-    public string drillName;          // 钻头名称
-    public DrillType drillType;       // 钻头类型（默认、升级后等）
+    public string drillId;                    // 钻头唯一标识
+    public string drillName;                  // 钻头名称
+    public DrillType drillType;               // 钻头类型
     
-    // 钻头核心属性
-    public int miningStrength;        // 挖掘强度（攻击值，初始由默认钻头决定）
-    public Vector2Int miningRange;     // 挖掘范围（长宽格子数，初始为5x5）
-    public Vector2Int drillCenter;     // 钻头中心点位置（默认在层中心：4,3）
+    // 钻机平台数据（替代原有的miningRange）
+    public DrillPlatformData platformData;    // 钻机平台数据
     
     // 额外属性（用于挖掘特殊矿石）
-    public Dictionary<string, int> additionalAttributes; // 额外钻头属性（如：特殊挖掘能力等）
+    public Dictionary<string, int> additionalAttributes;
     
     // 本关内升级（任务完成后重置）
-    public int currentLevel;          // 当前等级（本关内）
-    public List<DrillUpgrade> upgrades; // 本关内获得的升级
+    public int currentLevel;
+    public List<DrillUpgrade> upgrades;
     
     // 永久属性（由信用积分增强）
-    public int permanentStrengthBonus; // 永久强度加成
-    public Vector2Int permanentRangeBonus; // 永久范围加成
+    public int permanentStrengthBonus;
+    public float permanentAttackMultiplier;   // 永久攻击倍率加成
 }
 
 public enum DrillType
@@ -640,21 +713,42 @@ public enum DrillType
 [System.Serializable]
 public class DrillUpgrade
 {
-    public string upgradeId;         // 升级ID
-    public UpgradeType type;         // 升级类型
-    public int value;                // 升级数值
-    public string description;       // 升级描述
-    public bool isPermanent;         // 是否永久（本游戏中为false，仅本关生效）
+    public string upgradeId;
+    public UpgradeType type;
+    public int value;
+    public string description;
+    public bool isPermanent;
 }
 
 public enum UpgradeType
 {
     StrengthBoost,    // 强度提升
-    RangeBoost,       // 范围提升
+    RangeBoost,       // 范围提升（已弃用，改用造型系统）
+    NewShape,         // 获得新造型
     MiningEfficiency, // 挖掘效率提升
     EnergyBonus       // 能源加成
 }
 ```
+
+#### 3.11.6 造型旋转规则
+
+- 支持90度倍数旋转（0°/90°/180°/270°）
+- 旋转公式：90度顺时针旋转 `(x, y) -> (y, -x)`
+- 旋转后需重新检测碰撞和边界
+
+#### 3.11.7 放置规则
+
+- 每个格子只能被一个造型占用（不允许重叠）
+- 所有格子必须在9x9平台边界内
+- 玩家只能在回合之间编辑钻机平台布局
+
+#### 3.11.8 攻击强度计算
+
+```
+最终攻击强度 = 造型基础攻击强度 × (1 + 造型特性加成) × (1 + 挖矿船技能加成) × (1 + 永久加成)
+```
+
+每个被造型覆盖的格子都会对对应位置的矿石造成该格子的最终攻击强度伤害。
 
 ### 3.15 租船和债务系统数据结构
 
@@ -841,6 +935,83 @@ public enum UpgradeOptionType
     OreValueBoost        // 矿石价值提升
 }
 ```
+
+### 3.18.1 能源升级进度条UI设计
+
+能源升级进度条用于在挖矿主界面直观显示当前能源值相对于下一次升级阈值的进度。
+
+#### 3.18.1.1 进度计算逻辑
+
+- **数据来源**：
+  - 当前能源值：`EnergyUpgradeManager.GetCurrentEnergy()`
+  - 能源阈值列表：`EnergyUpgradeManager.GetEnergyData().energyThresholds`
+  - 下一个阈值索引：`EnergyUpgradeManager.GetEnergyData().nextThresholdIndex`
+
+- **进度计算公式**：
+  - 设当前能源为 `E`，阈值列表为 `T = [t1, t2, t3, ...]`，下一个阈值索引为 `idx`
+  - 若 `idx >= T.Count`（所有阈值已触发）：进度 = 1.0（100%）
+  - 否则：
+    - 下一个阈值：`nextThreshold = T[idx]`
+    - 上一个阈值：`prevThreshold = idx > 0 ? T[idx - 1] : 0`
+    - 进度 = `(E - prevThreshold) / (nextThreshold - prevThreshold)`
+    - 进度值限制在 [0, 1] 范围内
+
+- **进度重置**：
+  - 每次触发三选一升级后，`nextThresholdIndex` 递增，进度自动回落到新的区间（从0开始）
+
+#### 3.18.1.2 UI结构
+
+进度条使用三层图片素材，左对齐水平显示：
+
+```
+EnergyProgressBarRoot (RectTransform)
+├── BarBackgroundBottom (Image, Experience_bar_3) - 底层，永久显示，全宽
+├── BarFill (Image, Experience_bar_2) - 中间层，根据进度调整宽度
+└── BarForegroundTop (Image, Experience_bar_1) - 顶层，永久显示，全宽
+```
+
+- **底层 (Experience_bar_3)**：背景层，始终显示完整宽度
+- **中间层 (Experience_bar_2)**：进度填充层，通过修改 `RectTransform.sizeDelta.x` 控制宽度，实现进度效果
+- **顶层 (Experience_bar_1)**：装饰层，始终显示完整宽度，覆盖在中间层之上
+
+#### 3.18.1.3 组件接口
+
+```csharp
+/// <summary>
+/// 能源升级进度条组件
+/// </summary>
+public class EnergyProgressBar : MonoBehaviour
+{
+    [Header("UI引用")]
+    [SerializeField] private Image bottomImage;      // 底层图片
+    [SerializeField] private Image fillImage;        // 填充层图片
+    [SerializeField] private Image topImage;         // 顶层图片
+    [SerializeField] private TextMeshProUGUI percentText; // 可选：百分比文字
+    
+    private System.Func<int> _getCurrentEnergy;      // 获取当前能源的委托
+    private System.Func<List<int>> _getThresholds;  // 获取阈值列表的委托
+    private System.Func<int> _getNextThresholdIndex; // 获取下一个阈值索引的委托
+    
+    /// <summary>
+    /// 初始化进度条（注入数据来源）
+    /// </summary>
+    public void Initialize(
+        System.Func<int> getCurrentEnergy,
+        System.Func<List<int>> getThresholds,
+        System.Func<int> getNextThresholdIndex)
+    
+    /// <summary>
+    /// 更新进度条显示
+    /// </summary>
+    public void UpdateProgress()
+}
+```
+
+#### 3.18.1.4 与能源系统集成
+
+- 进度条组件通过委托方式从 `EnergyUpgradeManager` 获取数据，避免直接依赖
+- 在 `GameScreen.UpdateUI()` 中每帧调用 `UpdateProgress()` 更新显示
+- 可选：订阅能源变化事件，仅在能源值变化时更新，减少性能开销
 
 ### 3.19 信用积分系统数据结构
 

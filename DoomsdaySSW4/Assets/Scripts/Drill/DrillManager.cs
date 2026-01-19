@@ -22,6 +22,7 @@ public class DrillManager : MonoBehaviour
 
     private DrillData _currentDrill;
     private ConfigManager _configManager;
+    private DrillPlatformManager _platformManager;
 
     private void Awake()
     {
@@ -39,41 +40,57 @@ public class DrillManager : MonoBehaviour
     private void Start()
     {
         _configManager = ConfigManager.Instance;
+        _platformManager = DrillPlatformManager.Instance;
     }
 
     /// <summary>
-    /// 初始化默认钻头
+    /// 初始化钻头（使用造型系统）
     /// </summary>
-    public void InitializeDefaultDrill()
+    /// <param name="shipId">船只ID，用于获取初始造型配置</param>
+    public void InitializeDrill(string shipId = "default_ship")
     {
         // 确保 ConfigManager 已初始化（防止在 Start() 之前调用）
         if (_configManager == null)
         {
             _configManager = ConfigManager.Instance;
         }
-
-        DrillConfig config = _configManager.GetDrillConfig("default_drill");
-        if (config == null)
+        
+        if (_platformManager == null)
         {
-            Debug.LogError("无法加载默认钻头配置");
-            return;
+            _platformManager = DrillPlatformManager.Instance;
         }
+
+        // 获取船只配置
+        ShipConfig shipConfig = _configManager.GetShipConfig(shipId);
+        string drillName = shipConfig != null ? $"{shipConfig.shipName}的钻头" : "默认钻头";
 
         _currentDrill = new DrillData
         {
-            drillId = config.drillId,
-            drillName = config.drillName,
+            drillId = $"drill_{shipId}",
+            drillName = drillName,
             drillType = DrillType.Default,
-            miningStrength = config.miningStrength,
-            miningRange = new Vector2Int(config.miningRangeX, config.miningRangeY),
-            drillCenter = new Vector2Int(4, 4), // 默认在9x9中心
+            platformData = new DrillPlatformData(), // 使用造型系统
             currentLevel = 1,
             upgrades = new System.Collections.Generic.List<DrillUpgrade>(),
             permanentStrengthBonus = 0,
-            permanentRangeBonus = Vector2Int.zero
+            permanentAttackMultiplier = 1f
         };
 
-        Debug.Log($"默认钻头初始化完成: {_currentDrill.drillName}, 强度={_currentDrill.miningStrength}, 范围={_currentDrill.miningRange.x}x{_currentDrill.miningRange.y}");
+        // 初始化钻机平台（会根据船只配置放置初始造型）
+        _platformManager.InitializePlatform(shipId);
+        
+        // 关联平台数据
+        _currentDrill.platformData = _platformManager.GetPlatformData();
+
+        Debug.Log($"钻头初始化完成（造型系统），船只: {shipId}, 钻头: {_currentDrill.drillName}");
+    }
+    
+    /// <summary>
+    /// 初始化默认钻头（向后兼容）
+    /// </summary>
+    public void InitializeDefaultDrill()
+    {
+        InitializeDrill("default_ship");
     }
 
     /// <summary>
@@ -98,13 +115,27 @@ public class DrillManager : MonoBehaviour
         switch (upgrade.type)
         {
             case UpgradeType.StrengthBoost:
-                _currentDrill.miningStrength += upgrade.value;
-                Debug.Log($"钻头强度提升 {upgrade.value}，当前强度: {_currentDrill.miningStrength}");
+                // 增加永久攻击加成
+                _currentDrill.permanentStrengthBonus += upgrade.value;
+                Debug.Log($"钻头永久强度加成提升 {upgrade.value}，当前加成: {_currentDrill.permanentStrengthBonus}");
                 break;
 
             case UpgradeType.RangeBoost:
+                // 旧模式：范围提升（已弃用，保留向后兼容）
+                #pragma warning disable 612, 618
                 _currentDrill.miningRange += new Vector2Int(upgrade.value, upgrade.value);
-                Debug.Log($"钻头范围提升 {upgrade.value}，当前范围: {_currentDrill.miningRange.x}x{_currentDrill.miningRange.y}");
+                Debug.Log($"钻头范围提升 {upgrade.value}（旧模式）");
+                #pragma warning restore 612, 618
+                break;
+                
+            case UpgradeType.NewShape:
+                // 新模式：获得新造型
+                if (_platformManager != null && !string.IsNullOrEmpty(upgrade.description))
+                {
+                    // upgrade.description 存储新造型的 shapeId
+                    _platformManager.AddShapeToInventory(upgrade.description);
+                    Debug.Log($"获得新造型: {upgrade.description}");
+                }
                 break;
 
             default:
@@ -115,6 +146,31 @@ public class DrillManager : MonoBehaviour
         _currentDrill.upgrades.Add(upgrade);
         _currentDrill.currentLevel++;
     }
+    
+    /// <summary>
+    /// 添加新造型到库存
+    /// </summary>
+    public void AddNewShape(string shapeId)
+    {
+        if (_platformManager == null)
+        {
+            _platformManager = DrillPlatformManager.Instance;
+        }
+        
+        _platformManager.AddShapeToInventory(shapeId);
+    }
+    
+    /// <summary>
+    /// 获取钻机平台管理器
+    /// </summary>
+    public DrillPlatformManager GetPlatformManager()
+    {
+        if (_platformManager == null)
+        {
+            _platformManager = DrillPlatformManager.Instance;
+        }
+        return _platformManager;
+    }
 
     /// <summary>
     /// 重置本关升级（任务完成后）
@@ -123,12 +179,12 @@ public class DrillManager : MonoBehaviour
     {
         if (_currentDrill == null) return;
 
-        // 重新从配置加载基础属性
-        DrillConfig config = _configManager.GetDrillConfig(_currentDrill.drillId);
-        if (config != null)
+        // 对于造型系统，重新初始化平台（保留永久加成和已解锁的造型）
+        if (_currentDrill.UsesShapeSystem() && _platformManager != null)
         {
-            _currentDrill.miningStrength = config.miningStrength;
-            _currentDrill.miningRange = new Vector2Int(config.miningRangeX, config.miningRangeY);
+            // 注意：永久解锁的造型不应该被移除
+            // 这里只清空平台布局，造型库存保留
+            _platformManager.ClearPlatform();
         }
 
         // 清除本关升级（但保留永久加成）

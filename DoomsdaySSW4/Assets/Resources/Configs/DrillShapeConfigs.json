@@ -1,0 +1,274 @@
+﻿{
+    "shapes": [
+        {
+            "shapeId": "shape_single",
+            "shapeName": "������ͷ",
+            "baseAttackStrength": 30,
+            "cells": [
+                {
+                    "x": 0,
+                    "y": 0
+                }
+            ],
+            "traits": [],
+            "description": "������ĵ�����ͷ������������"
+        },
+        {
+            "shapeId": "shape_cross_small",
+            "shapeName": "ʮ����ͷ",
+            "baseAttackStrength": 15,
+            "cells": [
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": -1,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": -1
+                },
+                {
+                    "x": 0,
+                    "y": 1
+                }
+            ],
+            "traits": [],
+            "description": "ʮ����5����ͷ�����Ƿ�Χ��"
+        },
+        {
+            "shapeId": "shape_line_3",
+            "shapeName": "ֱ����ͷ",
+            "baseAttackStrength": 15,
+            "cells": [
+                {
+                    "x": -1,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                }
+            ],
+            "traits": [
+                {
+                    "traitId": "line_bonus",
+                    "traitName": "��͸ǿ��",
+                    "triggerCondition": "always",
+                    "effectType": "attack_multiplier",
+                    "effectValue": 1.100000023841858,
+                    "description": "ֱ�߹���ʱ������+10%"
+                }
+            ],
+            "description": "����3���Դ�10%�����ӳ�"
+        },
+        {
+            "shapeId": "shape_L",
+            "shapeName": "L����ͷ",
+            "baseAttackStrength": 15,
+            "cells": [
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": 1
+                },
+                {
+                    "x": 0,
+                    "y": 2
+                },
+                {
+                    "x": 1,
+                    "y": 2
+                }
+            ],
+            "traits": [],
+            "description": "L��4����ͷ���������ת��Ӧ����"
+        },
+        {
+            "shapeId": "shape_T",
+            "shapeName": "T����ͷ",
+            "baseAttackStrength": 15,
+            "cells": [
+                {
+                    "x": -1,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": 1
+                }
+            ],
+            "traits": [],
+            "description": "T��4����ͷ��ƽ��ĸ��Ƿ�Χ"
+        },
+        {
+            "shapeId": "shape_square_2x2",
+            "shapeName": "������ͷ",
+            "baseAttackStrength": 15,
+            "cells": [
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": 1
+                },
+                {
+                    "x": 1,
+                    "y": 1
+                }
+            ],
+            "traits": [
+                {
+                    "traitId": "square_stability",
+                    "traitName": "�ȶ��ṹ",
+                    "triggerCondition": "always",
+                    "effectType": "attack_multiplier",
+                    "effectValue": 1.0499999523162842,
+                    "description": "���νṹ�ṩ5%�����ӳ�"
+                }
+            ],
+            "description": "2x2������ͷ���ṹ�ȶ�"
+        },
+        {
+            "shapeId": "shape_Z",
+            "shapeName": "Z����ͷ",
+            "baseAttackStrength": 15,
+            "cells": [
+                {
+                    "x": -1,
+                    "y": 1
+                },
+                {
+                    "x": 0,
+                    "y": 1
+                },
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                }
+            ],
+            "traits": [],
+            "description": "Z��4����ͷ����λ����"
+        },
+        {
+            "shapeId": "shape_S",
+            "shapeName": "S����ͷ",
+            "baseAttackStrength": 15,
+            "cells": [
+                {
+                    "x": 1,
+                    "y": 1
+                },
+                {
+                    "x": 0,
+                    "y": 1
+                },
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": -1,
+                    "y": 0
+                }
+            ],
+            "traits": [],
+            "description": "S��4����ͷ����Z�;���"
+        },
+        {
+            "shapeId": "shape_line_4",
+            "shapeName": "������ͷ",
+            "baseAttackStrength": 15,
+            "cells": [
+                {
+                    "x": -1,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                },
+                {
+                    "x": 2,
+                    "y": 0
+                }
+            ],
+            "traits": [
+                {
+                    "traitId": "line_4_bonus",
+                    "traitName": "��ȴ�͸",
+                    "triggerCondition": "always",
+                    "effectType": "attack_multiplier",
+                    "effectValue": 1.149999976158142,
+                    "description": "��������ʱ������+15%"
+                }
+            ],
+            "description": "����4��������͸����ǿ"
+        },
+        {
+            "shapeId": "shape_energy_extractor",
+            "shapeName": "��Դ��ȡ��",
+            "baseAttackStrength": 20,
+            "cells": [
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                },
+                {
+                    "x": -1,
+                    "y": 0
+                }
+            ],
+            "traits": [
+                {
+                    "traitId": "energy_bonus",
+                    "traitName": "��Դ�׺�",
+                    "triggerCondition": "ore_type:energy",
+                    "effectType": "attack_multiplier",
+                    "effectValue": 1.5,
+                    "description": "�ھ���Դ��ʯʱ������+50%"
+                }
+            ],
+            "description": "ר�������ھ���Դ��ʯ����ͷ"
+        }
+    ]
+}

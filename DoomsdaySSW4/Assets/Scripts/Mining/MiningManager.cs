@@ -374,9 +374,60 @@ public class MiningManager : MonoBehaviour
             return tilesToAttack;
         }
 
+        // 使用造型系统获取攻击范围
+        if (drill.UsesShapeSystem())
+        {
+            return GetTilesToAttackWithShapeSystem(drill, layer);
+        }
+        
+        // 向后兼容：使用旧的矩形范围计算
+        return GetTilesToAttackLegacy(drill, layer);
+    }
+
+    /// <summary>
+    /// 使用造型系统获取攻击格子列表
+    /// </summary>
+    private List<AttackedTileInfo> GetTilesToAttackWithShapeSystem(DrillData drill, MiningLayerData layer)
+    {
+        List<AttackedTileInfo> tilesToAttack = new List<AttackedTileInfo>();
+        
+        DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
+        Dictionary<Vector2Int, CellAttackInfo> attackMap = calculator.CalculateAttackMap(drill);
+
+        foreach (var kvp in attackMap)
+        {
+            Vector2Int pos = kvp.Key;
+            
+            // 检查是否在地图范围内
+            if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
+                continue;
+
+            MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
+            if (tile == null || tile.tileType != TileType.Ore || tile.isMined)
+                continue;
+
+            tilesToAttack.Add(new AttackedTileInfo
+            {
+                position = pos,
+                attackStrength = kvp.Value.attackStrength
+            });
+        }
+
+        return tilesToAttack;
+    }
+
+    /// <summary>
+    /// 使用旧的矩形范围计算（向后兼容）
+    /// </summary>
+    private List<AttackedTileInfo> GetTilesToAttackLegacy(DrillData drill, MiningLayerData layer)
+    {
+        List<AttackedTileInfo> tilesToAttack = new List<AttackedTileInfo>();
+
         Vector2Int drillCenter = layer.drillCenter;
+        #pragma warning disable 612, 618
         Vector2Int range = drill.GetEffectiveRange();
         int attackValue = drill.GetEffectiveStrength();
+        #pragma warning restore 612, 618
 
         // 计算攻击范围（以钻头中心为基准）
         int halfRangeX = range.x / 2;
@@ -426,6 +477,141 @@ public class MiningManager : MonoBehaviour
             return new MiningResult();
         }
 
+        // 使用造型系统
+        if (drill.UsesShapeSystem())
+        {
+            return AttackOresWithShapeSystem(drill, layer, layerDepth);
+        }
+        
+        // 向后兼容：使用旧的矩形范围计算
+        return AttackOresLegacy(drill, layer, layerDepth);
+    }
+
+    /// <summary>
+    /// 使用造型系统攻击矿石
+    /// </summary>
+    private MiningResult AttackOresWithShapeSystem(DrillData drill, MiningLayerData layer, int layerDepth)
+    {
+        MiningResult result = new MiningResult
+        {
+            success = true,
+            minedOres = new List<OreData>(),
+            moneyGained = 0,
+            energyGained = 0,
+            partiallyDamagedOres = new List<OreData>()
+        };
+
+        DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
+        Dictionary<Vector2Int, CellAttackInfo> attackMap = calculator.CalculateAttackMap(drill);
+        // #region agent log
+        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"MiningManager:505\",\"hypothesisId\":\"E\",\"message\":\"AttackOresWithShapeSystem start\",\"data\":{{\"layerDepth\":{layerDepth},\"attackMap_count\":{attackMap?.Count},\"drill_usesShapeSystem\":{drill?.UsesShapeSystem()}}}}}\n"); } catch { }
+        // #endregion
+
+        foreach (var kvp in attackMap)
+        {
+            Vector2Int pos = kvp.Key;
+            int attackValue = kvp.Value.attackStrength;
+
+            // 检查是否在地图范围内
+            if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
+                continue;
+
+            MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
+            if (tile == null || tile.tileType != TileType.Ore || tile.isMined)
+                continue;
+
+            // 获取矿石类型用于条件特性计算
+            string oreType = GetOreTypeString(tile.mineralType);
+            
+            // 重新计算考虑矿石类型的攻击强度
+            int finalAttackValue = calculator.CalculateAttackStrengthForOre(pos, oreType, drill);
+            if (finalAttackValue == 0)
+            {
+                finalAttackValue = attackValue; // 回退到基础攻击值
+            }
+
+            // 对矿石造成伤害
+            tile.hardness -= finalAttackValue;
+
+            // 记录被攻击的格子信息（用于动效）
+            result.attackedTiles.Add(new AttackedTileInfo
+            {
+                position = pos,
+                attackStrength = finalAttackValue
+            });
+
+            // 如果硬度归零，挖掉矿石
+            if (tile.hardness <= 0)
+            {
+                OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
+                // #region agent log
+                try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"MiningManager:540\",\"hypothesisId\":\"A\",\"message\":\"GetOreAtPosition result\",\"data\":{{\"pos_x\":{pos.x},\"pos_y\":{pos.y},\"layerDepth\":{layerDepth},\"ore_is_null\":{(ore == null).ToString().ToLower()},\"ore_id\":\"{ore?.oreId}\",\"ore_isEnergyOre\":{(ore?.isEnergyOre ?? false).ToString().ToLower()},\"ore_energyValue\":{ore?.energyValue ?? 0}}}}}\n"); } catch { }
+                // #endregion
+                if (ore != null)
+                {
+                    tile.isMined = true;
+                    ore.isMined = true;
+                    result.minedOres.Add(ore);
+
+                    // 累计矿物
+                    if (!_miningData.minerals.ContainsKey(ore.mineralType))
+                        _miningData.minerals[ore.mineralType] = 0;
+                    _miningData.minerals[ore.mineralType]++;
+
+                    // 累计金钱和能源
+                    if (ore.isEnergyOre)
+                    {
+                        // #region agent log
+                        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"MiningManager:555\",\"hypothesisId\":\"B\",\"message\":\"Energy ore mined!\",\"data\":{{\"ore_id\":\"{ore.oreId}\",\"energyValue\":{ore.energyValue},\"result_energyGained_before\":{result.energyGained}}}}}\n"); } catch { }
+                        // #endregion
+                        result.energyGained += ore.energyValue;
+                    }
+                    else
+                    {
+                        result.moneyGained += ore.value;
+                    }
+                }
+            }
+            else
+            {
+                // 部分受损的矿石
+                OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
+                if (ore != null)
+                {
+                    ore.currentHardness = tile.hardness;
+                    result.partiallyDamagedOres.Add(ore);
+                }
+            }
+        }
+        // #region agent log
+        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"MiningManager:590\",\"hypothesisId\":\"E\",\"message\":\"AttackOresWithShapeSystem end\",\"data\":{{\"moneyGained\":{result.moneyGained},\"energyGained\":{result.energyGained},\"minedOres_count\":{result.minedOres?.Count}}}}}\n"); } catch { }
+        // #endregion
+
+        return result;
+    }
+
+    /// <summary>
+    /// 获取矿石类型字符串（用于特性触发）
+    /// </summary>
+    private string GetOreTypeString(MineralType mineralType)
+    {
+        switch (mineralType)
+        {
+            case MineralType.EnergyCore:
+                return "energy";
+            case MineralType.Diamond:
+            case MineralType.Crystal:
+                return "rare";
+            default:
+                return "common";
+        }
+    }
+
+    /// <summary>
+    /// 使用旧的矩形范围攻击（向后兼容）
+    /// </summary>
+    private MiningResult AttackOresLegacy(DrillData drill, MiningLayerData layer, int layerDepth)
+    {
         MiningResult result = new MiningResult
         {
             success = true,
@@ -436,8 +622,10 @@ public class MiningManager : MonoBehaviour
         };
 
         Vector2Int drillCenter = layer.drillCenter;
+        #pragma warning disable 612, 618
         Vector2Int range = drill.GetEffectiveRange();
         int attackValue = drill.GetEffectiveStrength();
+        #pragma warning restore 612, 618
 
         // 计算攻击范围（以钻头中心为基准）
         int halfRangeX = range.x / 2;
@@ -512,7 +700,6 @@ public class MiningManager : MonoBehaviour
             }
         }
 
-
         return result;
     }
 
@@ -538,9 +725,50 @@ public class MiningManager : MonoBehaviour
             return !hasUnminedOre;
         }
 
+        // 使用造型系统
+        if (drill.UsesShapeSystem())
+        {
+            return IsLayerFullyMinedWithShapeSystem(layer);
+        }
+
+        // 向后兼容：使用旧的矩形范围计算
+        return IsLayerFullyMinedLegacy(drill, layer);
+    }
+
+    /// <summary>
+    /// 使用造型系统检查层是否挖完
+    /// </summary>
+    private bool IsLayerFullyMinedWithShapeSystem(MiningLayerData layer)
+    {
+        DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
+        HashSet<Vector2Int> attackRange = calculator.GetAttackRange();
+
+        foreach (var pos in attackRange)
+        {
+            // 检查是否在地图范围内
+            if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
+                continue;
+
+            MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
+            if (tile != null && tile.tileType == TileType.Ore && !tile.isMined)
+            {
+                return false; // 还有未挖的矿石
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 使用旧的矩形范围检查层是否挖完（向后兼容）
+    /// </summary>
+    private bool IsLayerFullyMinedLegacy(DrillData drill, MiningLayerData layer)
+    {
         // 计算攻击范围（只检查攻击范围内的矿石）
         Vector2Int drillCenter = layer.drillCenter;
+        #pragma warning disable 612, 618
         Vector2Int range = drill.GetEffectiveRange();
+        #pragma warning restore 612, 618
         int halfRangeX = range.x / 2;
         int halfRangeY = range.y / 2;
 

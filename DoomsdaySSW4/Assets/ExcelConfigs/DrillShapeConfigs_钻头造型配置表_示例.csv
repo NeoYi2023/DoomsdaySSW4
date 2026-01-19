@@ -1,0 +1,11 @@
+shapeId,shapeName,baseAttackStrength,cells,traits,description
+shape_single,单点钻头,30,"0,0",,最基础的单格钻头，攻击力集中
+shape_cross_small,十字钻头,15,"0,0;-1,0;1,0;0,-1;0,1",,十字形5格钻头，覆盖范围广
+shape_line_3,直线钻头,15,"-1,0;0,0;1,0","[{""traitId"":""line_bonus"",""traitName"":""穿透强化"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.1,""description"":""直线攻击时攻击力+10%""}]",横向3格，自带10%攻击加成
+shape_L,L型钻头,15,"0,0;0,1;0,2;1,2",,L形4格钻头，可灵活旋转适应地形
+shape_T,T型钻头,15,"-1,0;0,0;1,0;0,1",,T形4格钻头，平衡的覆盖范围
+shape_square_2x2,方块钻头,15,"0,0;1,0;0,1;1,1","[{""traitId"":""square_stability"",""traitName"":""稳定结构"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.05,""description"":""方形结构提供5%攻击加成""}]",2x2方形钻头，结构稳定
+shape_Z,Z型钻头,15,"-1,1;0,1;0,0;1,0",,Z形4格钻头，错位布局
+shape_S,S型钻头,15,"1,1;0,1;0,0;-1,0",,S形4格钻头，与Z型镜像
+shape_line_4,长条钻头,15,"-1,0;0,0;1,0;2,0","[{""traitId"":""line_4_bonus"",""traitName"":""深度穿透"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.15,""description"":""长条攻击时攻击力+15%""}]",横向4格长条，穿透能力强
+shape_energy_extractor,能源提取器,20,"0,0;1,0;-1,0","[{""traitId"":""energy_bonus"",""traitName"":""能源亲和"",""triggerCondition"":""ore_type:energy"",""effectType"":""attack_multiplier"",""effectValue"":1.5,""description"":""挖掘能源矿石时攻击力+50%""}]",专门用于挖掘能源矿石的钻头

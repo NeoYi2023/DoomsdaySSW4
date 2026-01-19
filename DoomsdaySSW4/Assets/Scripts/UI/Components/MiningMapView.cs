@@ -31,7 +31,6 @@ public class MiningMapView : MonoBehaviour
     private RectTransform _containerRectTransform;
     private RectTransform _parentRectTransform;
     private bool _loggedEmptyTileThisUpdate = false;
-    private const string DebugLogPath = @"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log";
     
     [Header("晃动动效设置")]
     [SerializeField] private float shakeDuration = 0.5f; // 晃动持续时间（秒）
@@ -230,16 +229,11 @@ public class MiningMapView : MonoBehaviour
 
         if (gridLayout != null && !gridLayout.enabled)
         {
-            string gridEnableData = $"{{\"wasEnabled\":false,\"cellSize\":\"{EscapeJson(gridLayout.cellSize.ToString())}\",\"spacing\":\"{EscapeJson(spacing.ToString())}\"}}";
-            DebugLog("H7", "MiningMapView.cs:230", "GridLayout re-enabled in UpdateMap", gridEnableData);
             gridLayout.enabled = true;
         }
 
         // 清除旧的瓦片（会同时清除映射）
         ClearTiles();
-
-        string updateMapData = $"{{\"layerDepth\":{layerDepth},\"gridLayoutEnabled\":{(gridLayout != null && gridLayout.enabled).ToString().ToLowerInvariant()},\"cellSize\":\"{EscapeJson(gridLayout != null ? gridLayout.cellSize.ToString() : string.Empty)}\",\"spacing\":\"{EscapeJson(spacing.ToString())}\",\"tilePrefabNull\":{(tilePrefab == null).ToString().ToLowerInvariant()}}}";
-        DebugLog("H5", "MiningMapView.cs:236", "UpdateMap begin", updateMapData);
 
         // 创建新的瓦片
         for (int y = MiningManager.LAYER_HEIGHT - 1; y >= 0; y--) // 从下往上显示
@@ -306,14 +300,6 @@ public class MiningMapView : MonoBehaviour
 
         // 更新瓦片显示（这会存储基础颜色）
         UpdateTileVisual(tileObj, tileData);
-
-        if (!_loggedEmptyTileThisUpdate && tileData.tileType == TileType.Empty)
-        {
-            RectTransform rect = tileObj.GetComponent<RectTransform>();
-            string emptyTileData = $"{{\"pos\":\"{EscapeJson(pos.ToString())}\",\"rectNull\":{(rect == null).ToString().ToLowerInvariant()},\"anchoredPos\":\"{EscapeJson(rect != null ? rect.anchoredPosition.ToString() : string.Empty)}\",\"parent\":\"{EscapeJson(tileObj.transform.parent != null ? tileObj.transform.parent.name : string.Empty)}\",\"gridLayoutEnabled\":{(gridLayout != null && gridLayout.enabled).ToString().ToLowerInvariant()}}}";
-            DebugLog("H6", "MiningMapView.cs:321", "First empty tile created", emptyTileData);
-            _loggedEmptyTileThisUpdate = true;
-        }
     }
 
     /// <summary>
@@ -406,24 +392,19 @@ public class MiningMapView : MonoBehaviour
             return;
         }
 
-        // 获取当前层的钻头中心位置
-        MiningLayerData layer = _miningManager.GetLayer(_currentLayerDepth);
-        if (layer == null)
+        // 获取攻击范围
+        HashSet<Vector2Int> attackRange;
+        
+        if (drill.UsesShapeSystem())
         {
-            return;
+            // 使用造型系统获取攻击范围
+            attackRange = GetAttackRangeFromShapeSystem();
         }
-
-        Vector2Int drillCenter = layer.drillCenter;
-        Vector2Int range = drill.GetEffectiveRange();
-
-        // 计算攻击范围
-        int halfRangeX = range.x / 2;
-        int halfRangeY = range.y / 2;
-
-        int minX = Mathf.Max(0, drillCenter.x - halfRangeX);
-        int maxX = Mathf.Min(MiningManager.LAYER_WIDTH - 1, drillCenter.x + halfRangeX);
-        int minY = Mathf.Max(0, drillCenter.y - halfRangeY);
-        int maxY = Mathf.Min(MiningManager.LAYER_HEIGHT - 1, drillCenter.y + halfRangeY);
+        else
+        {
+            // 使用旧的矩形范围计算
+            attackRange = GetAttackRangeLegacy(drill);
+        }
 
         // 遍历所有格子，更新高亮状态
         for (int x = 0; x < MiningManager.LAYER_WIDTH; x++)
@@ -437,7 +418,7 @@ public class MiningMapView : MonoBehaviour
                 }
 
                 // 判断是否在攻击范围内
-                bool inRange = (x >= minX && x <= maxX && y >= minY && y <= maxY);
+                bool inRange = attackRange.Contains(pos);
                 
                 // 获取Image组件
                 Image image = tileObj.GetComponent<Image>();
@@ -477,6 +458,54 @@ public class MiningMapView : MonoBehaviour
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// 从造型系统获取攻击范围
+    /// </summary>
+    private HashSet<Vector2Int> GetAttackRangeFromShapeSystem()
+    {
+        DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
+        return calculator.GetAttackRange();
+    }
+
+    /// <summary>
+    /// 使用旧的矩形范围计算（向后兼容）
+    /// </summary>
+    private HashSet<Vector2Int> GetAttackRangeLegacy(DrillData drill)
+    {
+        HashSet<Vector2Int> range = new HashSet<Vector2Int>();
+        
+        // 获取当前层的钻头中心位置
+        MiningLayerData layer = _miningManager.GetLayer(_currentLayerDepth);
+        if (layer == null)
+        {
+            return range;
+        }
+
+        Vector2Int drillCenter = layer.drillCenter;
+        #pragma warning disable 612, 618
+        Vector2Int drillRange = drill.GetEffectiveRange();
+        #pragma warning restore 612, 618
+
+        // 计算攻击范围
+        int halfRangeX = drillRange.x / 2;
+        int halfRangeY = drillRange.y / 2;
+
+        int minX = Mathf.Max(0, drillCenter.x - halfRangeX);
+        int maxX = Mathf.Min(MiningManager.LAYER_WIDTH - 1, drillCenter.x + halfRangeX);
+        int minY = Mathf.Max(0, drillCenter.y - halfRangeY);
+        int maxY = Mathf.Min(MiningManager.LAYER_HEIGHT - 1, drillCenter.y + halfRangeY);
+
+        for (int x = minX; x <= maxX; x++)
+        {
+            for (int y = minY; y <= maxY; y++)
+            {
+                range.Add(new Vector2Int(x, y));
+            }
+        }
+
+        return range;
     }
 
     /// <summary>
@@ -714,17 +743,4 @@ public class MiningMapView : MonoBehaviour
         }
         return Vector2Int.one * -1; // 返回无效位置
     }
-
-    // #region agent log
-    private void DebugLog(string hypothesisId, string location, string message, string dataJson)
-    {
-        string line = $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"{hypothesisId}\",\"location\":\"{location}\",\"message\":\"{EscapeJson(message)}\",\"data\":{dataJson},\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-        File.AppendAllText(DebugLogPath, line + Environment.NewLine);
-    }
-
-    private static string EscapeJson(string value)
-    {
-        return string.IsNullOrEmpty(value) ? "" : value.Replace("\\", "\\\\").Replace("\"", "\\\"");
-    }
-    // #endregion
 }

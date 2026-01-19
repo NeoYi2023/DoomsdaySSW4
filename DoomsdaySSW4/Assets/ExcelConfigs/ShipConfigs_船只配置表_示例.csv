@@ -1,2 +1,2 @@
-shipId,shipName,initialDebt,description
-default_ship,默认挖矿船,3000,起始债务3000的默认挖矿船
+shipId,shipName,initialDebt,initialShapeIds,description
+default_ship,默认挖矿船,3000,shape_single;shape_line_3;shape_L,起始债务3000的默认挖矿船

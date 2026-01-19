@@ -31,7 +31,6 @@ public class SettingsScreen : MonoBehaviour
 
     private SettingsManager _settingsManager;
     private LocalizationManager _localizationManager;
-    private const string DebugLogPath = @"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log";
 
     // 临时设置（应用前不生效）
     private int _tempWidth;
@@ -100,8 +99,6 @@ public class SettingsScreen : MonoBehaviour
                 Debug.LogWarning("SettingsScreen: panel被识别为Canvas，不会在初始化时禁用它。请确保SettingsScreen组件附加在Canvas的子对象上，而不是Canvas本身。");
             }
         }
-        string panelResolvedData = $"{{\"panelNull\":{(panel == null).ToString().ToLowerInvariant()},\"panelName\":\"{EscapeJson(panel != null ? panel.name : string.Empty)}\",\"panelActive\":{(panel != null && panel.activeSelf).ToString().ToLowerInvariant()}}}";
-        DebugLog("H3", "SettingsScreen.cs:90", "Panel resolved in Start", panelResolvedData);
 
         InitializeUI();
         LoadCurrentSettings();
@@ -403,7 +400,6 @@ public class SettingsScreen : MonoBehaviour
     /// </summary>
     public void Show()
     {
-        DebugLog("H4", "SettingsScreen.cs:346", "Show called", $"{{\"panelNull\":{(panel == null).ToString().ToLowerInvariant()},\"gameObjectActive\":{gameObject.activeSelf.ToString().ToLowerInvariant()}}}");
         if (panel != null)
         {
             // 确保整个层级都是激活的（从根到panel）
@@ -466,17 +462,4 @@ public class SettingsScreen : MonoBehaviour
     {
         FontHelper.ApplyFontToGameObject(gameObject);
     }
-
-    // #region agent log
-    private void DebugLog(string hypothesisId, string location, string message, string dataJson)
-    {
-        string line = $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"{hypothesisId}\",\"location\":\"{location}\",\"message\":\"{EscapeJson(message)}\",\"data\":{dataJson},\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-        File.AppendAllText(DebugLogPath, line + Environment.NewLine);
-    }
-
-    private static string EscapeJson(string value)
-    {
-        return string.IsNullOrEmpty(value) ? "" : value.Replace("\\", "\\\\").Replace("\"", "\\\"");
-    }
-    // #endregion
 }

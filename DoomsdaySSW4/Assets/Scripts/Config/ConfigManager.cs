@@ -25,7 +25,6 @@ public class ConfigManager : MonoBehaviour
     // 配置数据存储
     private Dictionary<string, TaskConfig> _taskConfigs = new Dictionary<string, TaskConfig>();
     private Dictionary<string, OreConfig> _oreConfigs = new Dictionary<string, OreConfig>();
-    private Dictionary<string, DrillConfig> _drillConfigs = new Dictionary<string, DrillConfig>();
     private Dictionary<string, ShipConfig> _shipConfigs = new Dictionary<string, ShipConfig>();
     private Dictionary<int, OreSpawnConfig> _oreSpawnConfigs = new Dictionary<int, OreSpawnConfig>();
     private List<EnergyUpgradeConfig> _energyUpgradeConfigs = new List<EnergyUpgradeConfig>();
@@ -33,6 +32,12 @@ public class ConfigManager : MonoBehaviour
     private List<int> _energyThresholds = new List<int> { 50, 100, 150 }; // 默认能源阈值（向后兼容）
     private List<TileHardnessColorThreshold> _tileHardnessThresholds = new List<TileHardnessColorThreshold>();
     private readonly Color _defaultLowHardnessColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
+    
+    // 钻头造型配置
+    private Dictionary<string, DrillShapeConfig> _drillShapeConfigs = new Dictionary<string, DrillShapeConfig>();
+    
+    // 船只初始钻头配置（按shipId分组）
+    private Dictionary<string, List<ShipInitialDrillConfig>> _shipInitialDrillConfigs = new Dictionary<string, List<ShipInitialDrillConfig>>();
 
     private bool _isLoaded = false;
 
@@ -62,12 +67,13 @@ public class ConfigManager : MonoBehaviour
 
         LoadTaskConfigs();
         LoadOreConfigs();
-        LoadDrillConfigs();
         LoadShipConfigs();
         LoadOreSpawnConfigs();
         LoadEnergyUpgradeConfigs();
         LoadEnergyThresholdConfigs();
         LoadTileHardnessColorConfigs();
+        LoadDrillShapeConfigs();
+        LoadShipInitialDrillConfigs();
 
         _isLoaded = true;
         Debug.Log("所有配置加载完成");
@@ -130,36 +136,6 @@ public class ConfigManager : MonoBehaviour
         catch (System.Exception e)
         {
             Debug.LogError($"解析矿石配置失败: {e.Message}");
-        }
-    }
-
-    /// <summary>
-    /// 加载钻头配置
-    /// </summary>
-    public void LoadDrillConfigs()
-    {
-        TextAsset textAsset = Resources.Load<TextAsset>("Configs/DrillConfigs");
-        if (textAsset == null)
-        {
-            Debug.LogError("无法加载钻头配置: Configs/DrillConfigs");
-            return;
-        }
-
-        try
-        {
-            DrillConfigCollection collection = JsonUtility.FromJson<DrillConfigCollection>(textAsset.text);
-            _drillConfigs.Clear();
-
-            foreach (var drill in collection.drills)
-            {
-                _drillConfigs[drill.drillId] = drill;
-            }
-
-            Debug.Log($"成功加载 {_drillConfigs.Count} 个钻头配置");
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogError($"解析钻头配置失败: {e.Message}");
         }
     }
 
@@ -278,19 +254,6 @@ public class ConfigManager : MonoBehaviour
         }
         // 如果没有该层的配置，返回空配置
         return new OreSpawnConfig { layerDepth = layerDepth, spawnRules = new List<OreSpawnRule>() };
-    }
-
-    /// <summary>
-    /// 获取钻头配置
-    /// </summary>
-    public DrillConfig GetDrillConfig(string drillId)
-    {
-        if (_drillConfigs.TryGetValue(drillId, out DrillConfig config))
-        {
-            return config;
-        }
-        Debug.LogWarning($"未找到钻头配置: {drillId}");
-        return null;
     }
 
     /// <summary>
@@ -502,4 +465,222 @@ public class ConfigManager : MonoBehaviour
     {
         return _isLoaded;
     }
+
+    /// <summary>
+    /// 加载钻头造型配置
+    /// </summary>
+    public void LoadDrillShapeConfigs()
+    {
+        TextAsset textAsset = Resources.Load<TextAsset>("Configs/DrillShapeConfigs");
+        if (textAsset == null)
+        {
+            Debug.LogWarning("无法加载钻头造型配置: Configs/DrillShapeConfigs，使用空配置");
+            return;
+        }
+
+        try
+        {
+            // 由于JsonUtility不支持List<Vector2Int>的直接反序列化，使用中间格式
+            DrillShapeConfigCollectionJson jsonCollection = JsonUtility.FromJson<DrillShapeConfigCollectionJson>(textAsset.text);
+            _drillShapeConfigs.Clear();
+
+            if (jsonCollection != null && jsonCollection.shapes != null)
+            {
+                foreach (var jsonShape in jsonCollection.shapes)
+                {
+                    DrillShapeConfig config = ConvertFromJson(jsonShape);
+                    _drillShapeConfigs[config.shapeId] = config;
+                }
+
+            }
+
+            Debug.Log($"成功加载 {_drillShapeConfigs.Count} 个钻头造型配置");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"解析钻头造型配置失败: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 加载船只初始钻头配置
+    /// </summary>
+    public void LoadShipInitialDrillConfigs()
+    {
+        TextAsset textAsset = Resources.Load<TextAsset>("Configs/ShipInitialDrillConfigs");
+        if (textAsset == null)
+        {
+            Debug.LogWarning("无法加载船只初始钻头配置: Configs/ShipInitialDrillConfigs，使用默认配置");
+            return;
+        }
+
+        try
+        {
+            ShipInitialDrillConfigCollection collection = JsonUtility.FromJson<ShipInitialDrillConfigCollection>(textAsset.text);
+            _shipInitialDrillConfigs.Clear();
+
+            if (collection != null && collection.configs != null)
+            {
+                foreach (var config in collection.configs)
+                {
+                    if (!_shipInitialDrillConfigs.ContainsKey(config.shipId))
+                    {
+                        _shipInitialDrillConfigs[config.shipId] = new List<ShipInitialDrillConfig>();
+                    }
+                    _shipInitialDrillConfigs[config.shipId].Add(config);
+                }
+            }
+
+            Debug.Log($"成功加载 {collection?.configs?.Count ?? 0} 个船只初始钻头配置");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"解析船只初始钻头配置失败: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 从JSON格式转换为DrillShapeConfig
+    /// </summary>
+    private DrillShapeConfig ConvertFromJson(DrillShapeConfigJson jsonConfig)
+    {
+        DrillShapeConfig config = new DrillShapeConfig
+        {
+            shapeId = jsonConfig.shapeId,
+            shapeName = jsonConfig.shapeName,
+            baseAttackStrength = jsonConfig.baseAttackStrength,
+            description = jsonConfig.description,
+            cells = new List<Vector2Int>(),
+            traits = new List<ShapeTraitConfig>()
+        };
+
+        // 转换格子坐标
+        if (jsonConfig.cells != null)
+        {
+            foreach (var cell in jsonConfig.cells)
+            {
+                if (cell != null)
+                {
+                    config.cells.Add(new Vector2Int(cell.x, cell.y));
+                }
+            }
+        }
+
+        // 转换特性配置
+        if (jsonConfig.traits != null)
+        {
+            foreach (var trait in jsonConfig.traits)
+            {
+                config.traits.Add(new ShapeTraitConfig
+                {
+                    traitId = trait.traitId,
+                    traitName = trait.traitName,
+                    triggerCondition = trait.triggerCondition,
+                    effectType = trait.effectType,
+                    effectValue = trait.effectValue,
+                    description = trait.description
+                });
+            }
+        }
+
+        return config;
+    }
+
+    /// <summary>
+    /// 获取钻头造型配置
+    /// </summary>
+    public DrillShapeConfig GetDrillShapeConfig(string shapeId)
+    {
+        if (_drillShapeConfigs.TryGetValue(shapeId, out DrillShapeConfig config))
+        {
+            return config;
+        }
+        Debug.LogWarning($"未找到钻头造型配置: {shapeId}");
+        return null;
+    }
+
+    /// <summary>
+    /// 获取所有钻头造型配置
+    /// </summary>
+    public List<DrillShapeConfig> GetAllDrillShapeConfigs()
+    {
+        return _drillShapeConfigs.Values.ToList();
+    }
+
+    /// <summary>
+    /// 获取指定船只的初始钻头配置列表
+    /// </summary>
+    public List<ShipInitialDrillConfig> GetShipInitialDrillConfigs(string shipId)
+    {
+        if (_shipInitialDrillConfigs.TryGetValue(shipId, out List<ShipInitialDrillConfig> configs))
+        {
+            return new List<ShipInitialDrillConfig>(configs);
+        }
+        Debug.LogWarning($"未找到船只 {shipId} 的初始钻头配置，返回空列表");
+        return new List<ShipInitialDrillConfig>();
+    }
+
+    /// <summary>
+    /// 获取初始可用的造型ID列表（根据船只配置）
+    /// </summary>
+    public List<string> GetInitialShapeIds(string shipId)
+    {
+        ShipConfig shipConfig = GetShipConfig(shipId);
+        if (shipConfig != null)
+        {
+            return shipConfig.GetInitialShapeIdList();
+        }
+        Debug.LogWarning($"未找到船只 {shipId} 的配置，返回空列表");
+        return new List<string>();
+    }
+
+    /// <summary>
+    /// 获取造型配置的委托（用于DrillPlatformData）
+    /// </summary>
+    public System.Func<string, DrillShapeConfig> GetShapeConfigDelegate()
+    {
+        return GetDrillShapeConfig;
+    }
+}
+
+// JSON反序列化中间格式
+[System.Serializable]
+public class DrillShapeConfigCollectionJson
+{
+    public List<DrillShapeConfigJson> shapes;
+}
+
+[System.Serializable]
+public class DrillShapeConfigJson
+{
+    public string shapeId;
+    public string shapeName;
+    public int baseAttackStrength;
+    public List<CellPositionJson> cells;  // 使用可序列化的列表代替 int[][]
+    public List<ShapeTraitConfigJson> traits;
+    public string description;
+}
+
+/// <summary>
+/// 用于JSON序列化的格子坐标（因为JsonUtility不支持int[][]）
+/// </summary>
+[System.Serializable]
+public class CellPositionJson
+{
+    public int x;
+    public int y;
+    
+    public CellPositionJson() { }
+    public CellPositionJson(int x, int y) { this.x = x; this.y = y; }
+}
+
+[System.Serializable]
+public class ShapeTraitConfigJson
+{
+    public string traitId;
+    public string traitName;
+    public string triggerCondition;
+    public string effectType;
+    public float effectValue;
+    public string description;
 }

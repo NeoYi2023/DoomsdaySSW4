@@ -17,8 +17,9 @@ Excel文件必须使用以下命名格式：
 - `TaskConfigs` - 任务配置表
 - `OreConfigs` - 矿石配置表
 - `OreSpawnConfigs` - 矿石生成规则配置表
-- `DrillConfigs` - 钻头配置表
+- `DrillShapeConfigs` - 钻头造型配置表
 - `ShipConfigs` - 船只配置表
+- `ShipInitialDrillConfigs` - 船只初始钻头配置表
 - `EnergyUpgradeConfigs` - 能源升级配置表
 
 示例文件名：
@@ -80,33 +81,75 @@ Excel文件必须使用以下命名格式：
 
 **注意：** 同一`layerDepth`的多行会被合并为一个配置对象。
 
-### 4. DrillConfigs_钻头配置表.xlsx
+### 4. DrillShapeConfigs_钻头造型配置表.xlsx
 
-| drillId | drillName | miningStrength | miningRangeX | miningRangeY | description |
-|---------|-----------|----------------|--------------|--------------|-------------|
-| default_drill | 默认钻头 | 10 | 5 | 5 | 默认钻头，攻击值10，范围5x5 |
+| shapeId | shapeName | baseAttackStrength | cells | traits | description |
+|---------|-----------|---------------------|-------|--------|-------------|
+| shape_single | 单点钻头 | 3 | 0,0 | | 最基础的单格钻头，攻击力集中 |
+| shape_line_3 | 直线钻头 | 2 | -1,0;0,0;1,0 | [{"traitId":"line_bonus",...}] | 横向3格，自带10%攻击加成 |
 
 **字段说明：**
-- `drillId`: 钻头ID（字符串）
-- `drillName`: 钻头名称（字符串）
-- `miningStrength`: 挖掘强度（整数）
-- `miningRangeX`: 挖掘范围X（整数）
-- `miningRangeY`: 挖掘范围Y（整数）
-- `description`: 描述（字符串）
+- `shapeId`: 造型ID（字符串，唯一标识）
+- `shapeName`: 造型名称（字符串）
+- `baseAttackStrength`: 基础攻击强度（整数，每个格子的基础攻击值）
+- `cells`: 格子坐标列表（字符串，格式：`x1,y1;x2,y2;x3,y3`）
+  - 使用分号（`;`）分隔每个坐标对
+  - 每个坐标对使用逗号（`,`）分隔x和y坐标
+  - 例如：`0,0;1,0;1,1` 表示三个格子：`(0,0)`, `(1,0)`, `(1,1)`
+  - 支持负数坐标，如：`-1,0;0,0;1,0`
+- `traits`: 特性列表（JSON字符串，可为空）
+  - 格式：JSON数组字符串，如 `[{"traitId":"line_bonus","traitName":"穿透强化","triggerCondition":"always","effectType":"attack_multiplier","effectValue":1.1,"description":"直线攻击时攻击力+10%"}]`
+  - 如果造型没有特性，此字段留空
+  - 特性字段说明：
+    - `traitId`: 特性ID（字符串）
+    - `traitName`: 特性名称（字符串）
+    - `triggerCondition`: 触发条件（字符串，如 `always`、`ore_type:energy`）
+    - `effectType`: 效果类型（字符串，如 `attack_multiplier`、`attack_add`）
+    - `effectValue`: 效果数值（浮点数，如 `1.1` 表示+10%）
+    - `description`: 特性描述（字符串）
+- `description`: 造型描述（字符串）
+
+**注意事项：**
+- `cells` 字段包含逗号和分号，在CSV中必须用引号括起来，如 `"0,0;1,0;1,1"`
+- `traits` 字段是JSON字符串，在CSV中必须用引号括起来，如 `"[{...}]"`
+- 如果 `traits` 为空，单元格留空即可
+- 坐标系统：`(0,0)` 是锚点，其他坐标相对于锚点定义
 
 ### 5. ShipConfigs_船只配置表.xlsx
 
-| shipId | shipName | initialDebt | description |
-|--------|----------|-------------|-------------|
-| default_ship | 默认挖矿船 | 3000 | 起始债务3000的默认挖矿船 |
+| shipId | shipName | initialDebt | initialShapeIds | description |
+|--------|----------|-------------|-----------------|-------------|
+| default_ship | 默认挖矿船 | 3000 | shape_single;shape_line_3;shape_L | 起始债务3000的默认挖矿船 |
 
 **字段说明：**
 - `shipId`: 船只ID（字符串）
 - `shipName`: 船只名称（字符串）
 - `initialDebt`: 初始债务（整数）
+- `initialShapeIds`: 初始可用造型ID列表（字符串，使用分号分隔，如 `shape_single;shape_line_3;shape_L`）
 - `description`: 描述（字符串）
 
-### 6. EnergyUpgradeConfigs_能源升级配置表.xlsx
+**注意：** `initialShapeIds` 定义船只开始时拥有的钻头造型库存。
+
+### 6. ShipInitialDrillConfigs_船只初始钻头配置表.xlsx
+
+| shipId | shapeId | positionX | positionY | rotation |
+|--------|---------|-----------|-----------|----------|
+| default_ship | shape_single | 4 | 4 | 0 |
+
+**字段说明：**
+- `shipId`: 船只ID（字符串，必须与ShipConfigs中的shipId匹配）
+- `shapeId`: 造型ID（字符串，必须与DrillShapeConfigs中的shapeId匹配）
+- `positionX`: 在9x9平台上的X坐标（整数，0-8）
+- `positionY`: 在9x9平台上的Y坐标（整数，0-8）
+- `rotation`: 旋转角度（整数，0/90/180/270）
+
+**注意：**
+- 同一船只可以配置多行，表示该船只初始有多个钻头已放置在平台上
+- 放置位置不能超出9x9平台边界（0-8）
+- 放置的造型之间不能重叠
+- 初始放置的造型会从库存（`initialShapeIds`）中移除
+
+### 7. EnergyUpgradeConfigs_能源升级配置表.xlsx
 
 | upgradeId | type | name | description | value | weight | iconPath |
 |-----------|------|------|-------------|-------|--------|----------|
@@ -121,7 +164,7 @@ Excel文件必须使用以下命名格式：
 - `weight`: 权重（整数，用于随机选择）
 - `iconPath`: 图标路径（字符串，相对于Resources目录，如 "Icons/Upgrades/drill_strength_1"，可为空）
 
-### 7. EnergyThresholds_能源阈值配置表.xlsx
+### 8. EnergyThresholds_能源阈值配置表.xlsx
 
 | shipId | energyThresholds |
 |--------|------------------|
@@ -193,6 +236,14 @@ Excel文件必须使用以下命名格式：
 - `shipId`必须与ShipConfigs中的船只ID匹配
 - 确保没有多余的空格
 
+### Q: DrillShapeConfigs转换错误
+**A:** 检查：
+- `cells`列的值必须使用 `x,y;x,y` 格式（分号分隔坐标对，逗号分隔x和y）
+- `cells`字段包含逗号和分号，在CSV中必须用引号括起来，如 `"0,0;1,0;1,1"`
+- `traits`列的值必须是有效的JSON数组字符串，如果为空则留空单元格
+- `traits`字段是JSON字符串，在CSV中必须用引号括起来，如 `"[{...}]"`
+- 确保坐标值都是整数（支持负数）
+
 ## 输出文件位置
 
 转换后的JSON文件会保存到：
@@ -204,7 +255,8 @@ Assets/Resources/Configs/
 - `TaskConfigs.json`
 - `OreConfigs.json`
 - `OreSpawnConfigs.json`
-- `DrillConfigs.json`
+- `DrillShapeConfigs.json`
 - `ShipConfigs.json`
+- `ShipInitialDrillConfigs.json`
 - `EnergyUpgradeConfigs.json`
 - `EnergyThresholds.json`

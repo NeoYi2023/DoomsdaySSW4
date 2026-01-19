@@ -26,12 +26,23 @@ public class GameScreen : MonoBehaviour
     [Header("操作按钮")]
     [SerializeField] private Button endTurnButton;
     [SerializeField] private Button settingsButton;
+    [SerializeField] private Button autoMiningButton;          // 自动挖矿按钮
+    [SerializeField] private TextMeshProUGUI autoMiningText;   // 自动挖矿按钮文字
+    [SerializeField] private Button editDrillButton;           // 编辑钻头按钮
+    
+    [Header("状态显示")]
+    [SerializeField] private TextMeshProUGUI miningStatusText; // 挖矿状态文字
+    
+    [Header("能源进度条")]
+    [SerializeField] private EnergyProgressBar energyProgressBar; // 能源升级进度条
 
     private GameManager _gameManager;
     private MiningMapView _miningMapView;
     private UpgradeSelectionScreen _upgradeScreen;
     private SettingsScreen _settingsScreen;
-    private const string DebugLogPath = @"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log";
+    private DrillEditorScreen _drillEditorScreen;
+    private TurnManager _turnManager;
+    private EnergyUpgradeManager _energyManager;
 
     private void Awake()
     {
@@ -50,7 +61,6 @@ public class GameScreen : MonoBehaviour
 
     private void Start()
     {
-
         // 初始化挖矿地图视图
         if (miningMapContainer != null)
         {
@@ -88,8 +98,6 @@ public class GameScreen : MonoBehaviour
         {
             Debug.LogWarning("GameScreen: 未找到SettingsScreen，设置按钮可能无法正常工作。请确保场景中存在SettingsScreen GameObject。");
         }
-        string settingsFindData = $"{{\"found\":{(_settingsScreen != null).ToString().ToLowerInvariant()},\"count\":{allSettingsScreens.Length},\"name\":\"{EscapeJson(_settingsScreen != null ? _settingsScreen.gameObject.name : string.Empty)}\",\"active\":{(_settingsScreen != null && _settingsScreen.gameObject.activeSelf).ToString().ToLowerInvariant()}}}";
-        DebugLog("H1", "GameScreen.cs:72", "SettingsScreen found in Start", settingsFindData);
 
         // 设置按钮事件
         if (endTurnButton != null)
@@ -110,6 +118,58 @@ public class GameScreen : MonoBehaviour
                 settingsButton.gameObject.SetActive(true);
             }
             settingsButton.onClick.AddListener(OnSettingsButtonClicked);
+        }
+        
+        // 设置自动挖矿按钮
+        if (autoMiningButton != null)
+        {
+            if (!autoMiningButton.gameObject.activeInHierarchy)
+            {
+                autoMiningButton.gameObject.SetActive(true);
+            }
+            autoMiningButton.onClick.AddListener(OnAutoMiningButtonClicked);
+        }
+        
+        // 设置钻头编辑按钮
+        if (editDrillButton != null)
+        {
+            if (!editDrillButton.gameObject.activeInHierarchy)
+            {
+                editDrillButton.gameObject.SetActive(true);
+            }
+            editDrillButton.onClick.AddListener(OnEditDrillButtonClicked);
+        }
+        
+        // 查找钻头编辑界面
+        _drillEditorScreen = FindObjectOfType<DrillEditorScreen>(true);
+        
+        // 获取回合管理器并订阅事件
+        _turnManager = TurnManager.Instance;
+        if (_turnManager != null)
+        {
+            _turnManager.OnAutoMiningChanged.AddListener(OnAutoMiningChanged);
+            _turnManager.OnLayerSwitched.AddListener(OnLayerSwitched);
+        }
+        
+        // 获取能源管理器
+        _energyManager = EnergyUpgradeManager.Instance;
+        
+        // 初始化能源进度条
+        if (energyProgressBar != null && _energyManager != null)
+        {
+            energyProgressBar.Initialize(
+                () => _energyManager.GetCurrentEnergy(),
+                () =>
+                {
+                    EnergyData data = _energyManager.GetEnergyData();
+                    return data != null ? data.energyThresholds : null;
+                },
+                () =>
+                {
+                    EnergyData data = _energyManager.GetEnergyData();
+                    return data != null ? data.nextThresholdIndex : 0;
+                }
+            );
         }
 
         // 订阅游戏事件
@@ -386,6 +446,12 @@ public class GameScreen : MonoBehaviour
             // 刷新高亮状态（确保钻头范围变化时高亮也会更新）
             _miningMapView.RefreshHighlight();
         }
+        
+        // 更新能源进度条
+        if (energyProgressBar != null)
+        {
+            energyProgressBar.UpdateProgress();
+        }
     }
 
     /// <summary>
@@ -404,8 +470,6 @@ public class GameScreen : MonoBehaviour
     /// </summary>
     private void OnSettingsButtonClicked()
     {
-        string settingsClickData = $"{{\"settingsScreenNull\":{(_settingsScreen == null).ToString().ToLowerInvariant()},\"name\":\"{EscapeJson(_settingsScreen != null ? _settingsScreen.gameObject.name : string.Empty)}\",\"active\":{(_settingsScreen != null && _settingsScreen.gameObject.activeSelf).ToString().ToLowerInvariant()}}}";
-        DebugLog("H2", "GameScreen.cs:400", "Settings button clicked", settingsClickData);
         if (_settingsScreen != null)
         {
             _settingsScreen.Show();
@@ -415,19 +479,6 @@ public class GameScreen : MonoBehaviour
             Debug.LogWarning("GameScreen: SettingsScreen未找到，无法打开设置界面。");
         }
     }
-
-    // #region agent log
-    private void DebugLog(string hypothesisId, string location, string message, string dataJson)
-    {
-        string line = $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"{hypothesisId}\",\"location\":\"{location}\",\"message\":\"{EscapeJson(message)}\",\"data\":{dataJson},\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-        File.AppendAllText(DebugLogPath, line + Environment.NewLine);
-    }
-
-    private static string EscapeJson(string value)
-    {
-        return string.IsNullOrEmpty(value) ? "" : value.Replace("\\", "\\\\").Replace("\"", "\\\"");
-    }
-    // #endregion
 
     /// <summary>
     /// 游戏初始化完成
@@ -500,10 +551,134 @@ public class GameScreen : MonoBehaviour
     /// </summary>
     private void OnTurnProcessingCompleted()
     {
-        // 重新启用结束回合按钮
+        // 重新启用结束回合按钮（仅在非自动挖矿模式下）
         if (endTurnButton != null)
         {
-            endTurnButton.interactable = true;
+            bool isAutoMining = _turnManager != null && _turnManager.IsAutoMiningEnabled();
+            endTurnButton.interactable = !isAutoMining;
+        }
+    }
+    
+    /// <summary>
+    /// 自动挖矿按钮点击
+    /// </summary>
+    private void OnAutoMiningButtonClicked()
+    {
+        if (_turnManager != null)
+        {
+            _turnManager.ToggleAutoMining();
+        }
+    }
+    
+    /// <summary>
+    /// 编辑钻头按钮点击
+    /// </summary>
+    private void OnEditDrillButtonClicked()
+    {
+        // 检查是否允许编辑（非自动挖矿模式）
+        if (_turnManager != null && _turnManager.IsAutoMiningEnabled())
+        {
+            Debug.Log("自动挖矿中，无法编辑钻头");
+            if (miningStatusText != null)
+            {
+                miningStatusText.text = "自动挖矿中，无法编辑钻头";
+                miningStatusText.color = new Color(1f, 0.5f, 0.5f, 1f);
+            }
+            return;
+        }
+        
+        if (_drillEditorScreen != null)
+        {
+            _drillEditorScreen.Show();
+        }
+        else
+        {
+            Debug.LogWarning("GameScreen: DrillEditorScreen未找到，无法打开钻头编辑界面。");
+        }
+    }
+    
+    /// <summary>
+    /// 自动挖矿状态变化回调
+    /// </summary>
+    private void OnAutoMiningChanged(bool isEnabled)
+    {
+        UpdateAutoMiningUI(isEnabled);
+        
+        // 更新结束回合按钮状态
+        if (endTurnButton != null)
+        {
+            endTurnButton.interactable = !isEnabled;
+        }
+        
+        // 更新钻头编辑按钮状态
+        if (editDrillButton != null)
+        {
+            editDrillButton.interactable = !isEnabled;
+        }
+    }
+    
+    /// <summary>
+    /// 切换到新层回调
+    /// </summary>
+    private void OnLayerSwitched()
+    {
+        // 切换到新层时更新挖矿状态文字
+        UpdateMiningStatusText();
+    }
+    
+    /// <summary>
+    /// 更新自动挖矿UI
+    /// </summary>
+    private void UpdateAutoMiningUI(bool isAutoMiningEnabled)
+    {
+        // 更新按钮文字
+        if (autoMiningText != null)
+        {
+            autoMiningText.text = isAutoMiningEnabled ? "停止自动挖矿" : "自动向下挖矿";
+        }
+        else if (autoMiningButton != null)
+        {
+            // 如果没有单独的文字组件，尝试获取按钮子对象的文字
+            TextMeshProUGUI buttonText = autoMiningButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (buttonText != null)
+            {
+                buttonText.text = isAutoMiningEnabled ? "停止自动挖矿" : "自动向下挖矿";
+            }
+        }
+        
+        // 更新按钮颜色表示状态
+        if (autoMiningButton != null)
+        {
+            UnityEngine.UI.Image buttonImage = autoMiningButton.GetComponent<UnityEngine.UI.Image>();
+            if (buttonImage != null)
+            {
+                buttonImage.color = isAutoMiningEnabled ? new Color(0.8f, 0.4f, 0.4f, 1f) : new Color(0.4f, 0.8f, 0.4f, 1f);
+            }
+        }
+        
+        // 更新状态文字
+        UpdateMiningStatusText();
+    }
+    
+    /// <summary>
+    /// 更新挖矿状态文字
+    /// </summary>
+    private void UpdateMiningStatusText()
+    {
+        if (miningStatusText == null) return;
+        
+        bool isAutoMining = _turnManager != null && _turnManager.IsAutoMiningEnabled();
+        bool isProcessing = _turnManager != null && _turnManager.IsProcessingTurn();
+        
+        if (isAutoMining)
+        {
+            miningStatusText.text = isProcessing ? "自动挖矿中..." : "自动挖矿已开启";
+            miningStatusText.color = new Color(0.4f, 0.8f, 0.4f, 1f); // 绿色
+        }
+        else
+        {
+            miningStatusText.text = "可以调整钻头位置";
+            miningStatusText.color = new Color(1f, 1f, 1f, 1f); // 白色
         }
     }
 }

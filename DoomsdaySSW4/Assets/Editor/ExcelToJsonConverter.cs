@@ -44,7 +44,7 @@ public class ExcelToJsonConverter : EditorWindow
         EditorGUILayout.LabelField("说明：", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
             "1. Excel文件命名格式：配置表名_中文备注字段.xlsx 或 .csv\n" +
-            "2. 支持的文件：TaskConfigs, OreConfigs, OreSpawnConfigs, DrillConfigs, ShipConfigs, EnergyUpgradeConfigs, EnergyThresholds\n" +
+            "2. 支持的文件：TaskConfigs, OreConfigs, OreSpawnConfigs, DrillConfigs, DrillShapeConfigs, ShipConfigs, EnergyUpgradeConfigs, EnergyThresholds\n" +
             "3. Excel第一行必须是表头（字段名）\n" +
             "4. 字段名必须与C#类属性名完全匹配（区分大小写）\n" +
             "5. 如果Excel文件不可用，可以导出为CSV格式（UTF-8编码）\n" +
@@ -351,14 +351,16 @@ public class ExcelToJsonConverter : EditorWindow
                     return ConvertOreConfigs(data, outputPath);
                 case "OreSpawnConfigs":
                     return ConvertOreSpawnConfigs(data, outputPath);
-                case "DrillConfigs":
-                    return ConvertDrillConfigs(data, outputPath);
                 case "ShipConfigs":
                     return ConvertShipConfigs(data, outputPath);
+                case "ShipInitialDrillConfigs":
+                    return ConvertShipInitialDrillConfigs(data, outputPath);
                 case "EnergyUpgradeConfigs":
                     return ConvertEnergyUpgradeConfigs(data, outputPath);
                 case "EnergyThresholds":
                     return ConvertEnergyThresholdConfigs(data, outputPath);
+                case "DrillShapeConfigs":
+                    return ConvertDrillShapeConfigs(data, outputPath);
                 default:
                     AddLog($"  错误：不支持的配置表类型 - {configName}");
                     return false;
@@ -491,40 +493,6 @@ public class ExcelToJsonConverter : EditorWindow
     }
 
     /// <summary>
-    /// 转换DrillConfigs
-    /// </summary>
-    private bool ConvertDrillConfigs(List<Dictionary<string, string>> data, string outputPath)
-    {
-        List<DrillConfig> drills = new List<DrillConfig>();
-
-        foreach (var row in data)
-        {
-            try
-            {
-                DrillConfig drill = new DrillConfig
-                {
-                    drillId = GetString(row, "drillId"),
-                    drillName = GetString(row, "drillName"),
-                    miningStrength = GetInt(row, "miningStrength"),
-                    miningRangeX = GetInt(row, "miningRangeX"),
-                    miningRangeY = GetInt(row, "miningRangeY"),
-                    description = GetString(row, "description")
-                };
-                drills.Add(drill);
-            }
-            catch (Exception e)
-            {
-                AddLog($"  警告：跳过无效行 - {e.Message}");
-            }
-        }
-
-        DrillConfigCollection collection = new DrillConfigCollection { drills = drills.ToArray() };
-        string json = JsonUtility.ToJson(collection, true);
-        File.WriteAllText(outputPath, json, Encoding.UTF8);
-        return true;
-    }
-
-    /// <summary>
     /// 转换ShipConfigs
     /// </summary>
     private bool ConvertShipConfigs(List<Dictionary<string, string>> data, string outputPath)
@@ -540,6 +508,7 @@ public class ExcelToJsonConverter : EditorWindow
                     shipId = GetString(row, "shipId"),
                     shipName = GetString(row, "shipName"),
                     initialDebt = GetInt(row, "initialDebt"),
+                    initialShapeIds = GetString(row, "initialShapeIds"),
                     description = GetString(row, "description")
                 };
                 ships.Add(ship);
@@ -551,6 +520,39 @@ public class ExcelToJsonConverter : EditorWindow
         }
 
         ShipConfigCollection collection = new ShipConfigCollection { ships = ships.ToArray() };
+        string json = JsonUtility.ToJson(collection, true);
+        File.WriteAllText(outputPath, json, Encoding.UTF8);
+        return true;
+    }
+
+    /// <summary>
+    /// 转换ShipInitialDrillConfigs
+    /// </summary>
+    private bool ConvertShipInitialDrillConfigs(List<Dictionary<string, string>> data, string outputPath)
+    {
+        List<ShipInitialDrillConfig> configs = new List<ShipInitialDrillConfig>();
+
+        foreach (var row in data)
+        {
+            try
+            {
+                ShipInitialDrillConfig config = new ShipInitialDrillConfig
+                {
+                    shipId = GetString(row, "shipId"),
+                    shapeId = GetString(row, "shapeId"),
+                    positionX = GetInt(row, "positionX"),
+                    positionY = GetInt(row, "positionY"),
+                    rotation = GetInt(row, "rotation")
+                };
+                configs.Add(config);
+            }
+            catch (Exception e)
+            {
+                AddLog($"  警告：跳过无效行 - {e.Message}");
+            }
+        }
+
+        ShipInitialDrillConfigCollection collection = new ShipInitialDrillConfigCollection { configs = configs };
         string json = JsonUtility.ToJson(collection, true);
         File.WriteAllText(outputPath, json, Encoding.UTF8);
         return true;
@@ -639,6 +641,98 @@ public class ExcelToJsonConverter : EditorWindow
         return true;
     }
 
+    /// <summary>
+    /// 转换DrillShapeConfigs
+    /// </summary>
+    private bool ConvertDrillShapeConfigs(List<Dictionary<string, string>> data, string outputPath)
+    {
+        List<DrillShapeConfigJson> shapes = new List<DrillShapeConfigJson>();
+
+        foreach (var row in data)
+        {
+            try
+            {
+                DrillShapeConfigJson shape = new DrillShapeConfigJson
+                {
+                    shapeId = GetString(row, "shapeId"),
+                    shapeName = GetString(row, "shapeName"),
+                    baseAttackStrength = GetInt(row, "baseAttackStrength"),
+                    description = GetString(row, "description")
+                };
+
+                // 解析cells字段（格式：x,y;x,y;x,y）
+                string cellsStr = GetString(row, "cells");
+                if (!string.IsNullOrEmpty(cellsStr))
+                {
+                    List<CellPositionJson> cells = new List<CellPositionJson>();
+                    string[] cellPairs = cellsStr.Split(';');
+                    foreach (string cellPair in cellPairs)
+                    {
+                        string trimmed = cellPair.Trim();
+                        if (string.IsNullOrEmpty(trimmed))
+                            continue;
+
+                        string[] coords = trimmed.Split(',');
+                        if (coords.Length >= 2)
+                        {
+                            if (int.TryParse(coords[0].Trim(), out int x) &&
+                                int.TryParse(coords[1].Trim(), out int y))
+                            {
+                                cells.Add(new CellPositionJson(x, y));
+                            }
+                        }
+                    }
+                    shape.cells = cells;
+                }
+                else
+                {
+                    shape.cells = new List<CellPositionJson>();
+                }
+
+                // 解析traits字段（JSON字符串）
+                string traitsStr = GetString(row, "traits");
+                if (!string.IsNullOrEmpty(traitsStr))
+                {
+                    try
+                    {
+                        // 解析JSON字符串为ShapeTraitConfigJson数组
+                        // JsonUtility需要包装类来解析数组
+                        string wrappedJson = "{\"traits\":" + traitsStr + "}";
+                        ShapeTraitConfigJsonArrayWrapper wrapper = JsonUtility.FromJson<ShapeTraitConfigJsonArrayWrapper>(wrappedJson);
+                        if (wrapper != null && wrapper.traits != null)
+                        {
+                            shape.traits = new List<ShapeTraitConfigJson>(wrapper.traits);
+                        }
+                        else
+                        {
+                            shape.traits = new List<ShapeTraitConfigJson>();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        AddLog($"  警告：解析traits失败 - {e.Message}，跳过该造型的特性");
+                        shape.traits = new List<ShapeTraitConfigJson>();
+                    }
+                }
+                else
+                {
+                    shape.traits = new List<ShapeTraitConfigJson>();
+                }
+
+                shapes.Add(shape);
+            }
+            catch (Exception e)
+            {
+                AddLog($"  警告：跳过无效行 - {e.Message}");
+            }
+        }
+
+        DrillShapeConfigCollectionJson collection = new DrillShapeConfigCollectionJson { shapes = shapes };
+        string json = JsonUtility.ToJson(collection, true);
+        File.WriteAllText(outputPath, json, Encoding.UTF8);
+        return true;
+    }
+
     // 辅助方法：从字典获取值
     private string GetString(Dictionary<string, string> row, string key)
     {
@@ -679,4 +773,13 @@ public class ExcelToJsonConverter : EditorWindow
         logMessages.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
         Debug.Log($"[ExcelToJsonConverter] {message}");
     }
+}
+
+/// <summary>
+/// Traits数组包装类（用于JsonUtility解析）
+/// </summary>
+[System.Serializable]
+public class ShapeTraitConfigJsonArrayWrapper
+{
+    public ShapeTraitConfigJson[] traits;
 }

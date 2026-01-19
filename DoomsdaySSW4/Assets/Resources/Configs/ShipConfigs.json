@@ -4,6 +4,7 @@
             "shipId": "default_ship",
             "shipName": "默认挖矿船",
             "initialDebt": 3000,
+            "initialShapeIds": "shape_single;shape_line_3;shape_L",
             "description": "起始债务3000的默认挖矿船"
         }
     ]
