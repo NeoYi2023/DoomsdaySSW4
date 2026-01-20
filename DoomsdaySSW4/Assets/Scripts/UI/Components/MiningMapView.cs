@@ -38,13 +38,29 @@ public class MiningMapView : MonoBehaviour
     [SerializeField] private float shakeFrequency = 12f; // 晃动频率（次/秒）
     private Dictionary<Vector2Int, Vector2> _originalPositions = new Dictionary<Vector2Int, Vector2>(); // 存储格子的原始位置
     private List<Coroutine> _activeShakeCoroutines = new List<Coroutine>(); // 当前活动的晃动协程
+    private bool _isAnimating = false; // 是否正在播放动画（防止UpdateMap中断动画）
+    
+    /// <summary>
+    /// 检查是否正在播放动画
+    /// </summary>
+    public bool IsAnimating => _isAnimating;
     
     [Header("高亮设置")]
     [SerializeField] private bool enableHighlight = true; // 是否启用高亮
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 0.5f, 1f); // 高亮颜色（淡黄色）
     [SerializeField] private float dimmedAlpha = 0.3f; // 变暗的透明度
     
+    [Header("伤害高亮设置")]
+    [SerializeField] private Color damageHighlightColor = new Color(1f, 0f, 0f, 0.4f); // 红色半透明高亮
+    
     private readonly Color _defaultOreColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
+    
+    // 矿石图片缓存
+    private Dictionary<string, Sprite> _oreSpriteCache = new Dictionary<string, Sprite>();
+    private Dictionary<Vector2Int, string> _tileOreIds = new Dictionary<Vector2Int, string>(); // 存储每个格子的矿石ID
+    
+    // 未完全挖掉的格子记录（用于红色高亮）
+    private HashSet<Vector2Int> _damagedButNotMinedTiles = new HashSet<Vector2Int>();
 
     private void Awake()
     {
@@ -205,6 +221,12 @@ public class MiningMapView : MonoBehaviour
     /// </summary>
     public void UpdateMap(int layerDepth)
     {
+        // 如果正在播放动画，跳过更新（防止动画被中断）
+        if (_isAnimating)
+        {
+            return;
+        }
+        
         _currentLayerDepth = layerDepth;
         _loggedEmptyTileThisUpdate = false;
 
@@ -234,7 +256,7 @@ public class MiningMapView : MonoBehaviour
 
         // 清除旧的瓦片（会同时清除映射）
         ClearTiles();
-
+        
         // 创建新的瓦片
         for (int y = MiningManager.LAYER_HEIGHT - 1; y >= 0; y--) // 从下往上显示
         {
@@ -243,7 +265,7 @@ public class MiningMapView : MonoBehaviour
                 CreateTile(x, y, grid[x, y]);
             }
         }
-
+        
         // 更新高亮状态
         if (enableHighlight)
         {
@@ -270,7 +292,18 @@ public class MiningMapView : MonoBehaviour
 
             // 添加Image组件
             Image image = tileObj.AddComponent<Image>();
-            image.color = GetTileColor(tileData);
+            
+            // 尝试加载矿石图片
+            Sprite oreSprite = GetOreSpriteForTile(tileData);
+            if (oreSprite != null)
+            {
+                image.sprite = oreSprite;
+                image.color = Color.white; // 使用白色让图片显示原色
+            }
+            else
+            {
+                image.color = GetTileColor(tileData);
+            }
 
             // 添加Text显示硬度
             GameObject textObj = new GameObject("HardnessText");
@@ -297,6 +330,16 @@ public class MiningMapView : MonoBehaviour
         // 添加到映射表
         Vector2Int pos = new Vector2Int(x, y);
         _tileMap[pos] = tileObj;
+        
+        // 存储矿石ID（用于后续效果）
+        if (tileData.tileType == TileType.Ore && !tileData.isMined)
+        {
+            string oreId = GetOreIdFromMineralType(tileData.mineralType);
+            if (!string.IsNullOrEmpty(oreId))
+            {
+                _tileOreIds[pos] = oreId;
+            }
+        }
 
         // 更新瓦片显示（这会存储基础颜色）
         UpdateTileVisual(tileObj, tileData);
@@ -310,11 +353,23 @@ public class MiningMapView : MonoBehaviour
         Image image = tileObj.GetComponent<Image>();
         if (image != null)
         {
-            Color baseColor = GetTileColor(tileData);
-            image.color = baseColor;
-            
-            // 存储基础颜色（用于高亮计算）
-            _baseColors[new Vector2Int(tileData.x, tileData.y)] = baseColor;
+            // 尝试使用矿石图片
+            Sprite oreSprite = GetOreSpriteForTile(tileData);
+            if (oreSprite != null)
+            {
+                image.sprite = oreSprite;
+                image.color = Color.white;
+                // 存储白色作为基础颜色（用于高亮计算）
+                _baseColors[new Vector2Int(tileData.x, tileData.y)] = Color.white;
+            }
+            else
+            {
+                // 回退到颜色显示
+                image.sprite = null;
+                Color baseColor = GetTileColor(tileData);
+                image.color = baseColor;
+                _baseColors[new Vector2Int(tileData.x, tileData.y)] = baseColor;
+            }
         }
 
         // 更新文本
@@ -374,6 +429,85 @@ public class MiningMapView : MonoBehaviour
         _tileObjects.Clear();
         _tileMap.Clear();
         _baseColors.Clear();
+        _tileOreIds.Clear();
+    }
+    
+    /// <summary>
+    /// 获取瓦片的矿石格子Sprite（用于地图显示）
+    /// </summary>
+    private Sprite GetOreSpriteForTile(MiningTileData tileData)
+    {
+        if (tileData.tileType != TileType.Ore || tileData.isMined)
+        {
+            return null;
+        }
+        
+        // 获取矿石ID
+        string oreId = GetOreIdFromMineralType(tileData.mineralType);
+        if (string.IsNullOrEmpty(oreId))
+        {
+            return null;
+        }
+        
+        // 获取矿石配置
+        OreConfig config = _configManager?.GetOreConfig(oreId);
+        if (config == null || string.IsNullOrEmpty(config.latticeSpritePath))
+        {
+            return null;
+        }
+        
+        // 从缓存或Resources加载格子Sprite
+        return LoadLatticeSprite(config.latticeSpritePath);
+    }
+    
+    /// <summary>
+    /// 加载矿石格子Sprite（带缓存）
+    /// </summary>
+    private Sprite LoadLatticeSprite(string spritePath)
+    {
+        if (string.IsNullOrEmpty(spritePath))
+        {
+            return null;
+        }
+        
+        // 检查缓存
+        if (_oreSpriteCache.TryGetValue(spritePath, out Sprite cachedSprite))
+        {
+            return cachedSprite;
+        }
+        
+        // 从Resources加载
+        Sprite sprite = Resources.Load<Sprite>(spritePath);
+        if (sprite != null)
+        {
+            _oreSpriteCache[spritePath] = sprite;
+        }
+        
+        return sprite;
+    }
+    
+    /// <summary>
+    /// 根据MineralType获取矿石ID
+    /// </summary>
+    private string GetOreIdFromMineralType(MineralType mineralType)
+    {
+        switch (mineralType)
+        {
+            case MineralType.Iron: return "iron";
+            case MineralType.Gold: return "gold";
+            case MineralType.Diamond: return "diamond";
+            case MineralType.Crystal: return "crystal";
+            case MineralType.EnergyCore: return "energy_core";
+            default: return null;
+        }
+    }
+    
+    /// <summary>
+    /// 获取瓦片的矿石ID
+    /// </summary>
+    public string GetTileOreId(Vector2Int position)
+    {
+        return _tileOreIds.TryGetValue(position, out string oreId) ? oreId : null;
     }
 
     /// <summary>
@@ -543,8 +677,21 @@ public class MiningMapView : MonoBehaviour
             yield break;
         }
 
+        // 标记正在播放动画
+        _isAnimating = true;
+        
         // 停止所有正在进行的晃动动画
         StopAllShakeAnimations();
+        
+        // 清除并记录未完全挖掉的格子（用于红色高亮）
+        _damagedButNotMinedTiles.Clear();
+        foreach (var tile in attackedTiles)
+        {
+            if (!tile.isFullyMined)
+            {
+                _damagedButNotMinedTiles.Add(tile.position);
+            }
+        }
 
         // 按攻击强度分组格子
         var tilesByStrength = attackedTiles
@@ -578,6 +725,12 @@ public class MiningMapView : MonoBehaviour
         {
             yield return coroutine;
         }
+        
+        // 晃动结束，清除红色高亮记录
+        _damagedButNotMinedTiles.Clear();
+        
+        // 清除动画标志
+        _isAnimating = false;
     }
 
     /// <summary>
@@ -607,6 +760,12 @@ public class MiningMapView : MonoBehaviour
             }
         }
         _originalPositions.Clear();
+        
+        // 如果有动画被强制停止，清除动画标志
+        if (_isAnimating)
+        {
+            _isAnimating = false;
+        }
     }
 
     /// <summary>
@@ -628,9 +787,10 @@ public class MiningMapView : MonoBehaviour
             gridLayout.enabled = false; // 暂停布局，避免覆盖位置偏移
         }
 
-        // 保存原始位置（使用坐标作为key，因为GameObject可能被重建）
+        // 保存原始位置和颜色（使用坐标作为key，因为GameObject可能被重建）
         Dictionary<Vector2Int, Vector2> originalPositions = new Dictionary<Vector2Int, Vector2>();
         Dictionary<Vector2Int, Vector2> shakeDirections = new Dictionary<Vector2Int, Vector2>();
+        Dictionary<Vector2Int, Color> originalColors = new Dictionary<Vector2Int, Color>();
         int rectTransformCount = 0;
         
         foreach (var pos in tilePositions)
@@ -650,9 +810,18 @@ public class MiningMapView : MonoBehaviour
                     System.Random tileRandom = new System.Random(seed);
                     float angle = (float)(tileRandom.NextDouble() * 2 * Mathf.PI);
                     shakeDirections[pos] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                    
+                    // 保存原始颜色（用于红色高亮后恢复）
+                    Image image = tile.GetComponent<Image>();
+                    if (image != null)
+                    {
+                        originalColors[pos] = image.color;
+                    }
                 }
             }
         }
+        
+        Debug.Log($"[MiningMapView] ShakeTilesCoroutine: Found {rectTransformCount} valid tiles out of {tilePositions.Count} positions, shakeDuration={shakeDuration}s, shakeAmplitude={shakeAmplitude}");
 
         float startTime = Time.time; // 记录开始时间
         while (true)
@@ -670,8 +839,11 @@ public class MiningMapView : MonoBehaviour
             // 使用正弦波实现晃动效果
             float shakeValue = Mathf.Sin(elapsedTime * shakeFrequency * Mathf.PI * 2) * (1f - curveValue);
             float currentAmplitude = shakeAmplitude * (1f - curveValue); // 逐渐减小幅度
+            
+            // 红色高亮闪烁效果（使用正弦波）
+            float highlightIntensity = (Mathf.Sin(elapsedTime * 8f) + 1f) / 2f; // 0-1 之间闪烁
 
-            // 更新每个格子的位置（使用坐标从_tileMap重新查找GameObject）
+            // 更新每个格子的位置和颜色（使用坐标从_tileMap重新查找GameObject）
             foreach (var pos in tilePositions)
             {
                 // 每次循环都重新从_tileMap查找（因为UpdateMap可能重建了格子）
@@ -696,8 +868,21 @@ public class MiningMapView : MonoBehaviour
                     continue;
                 }
                 
+                // 更新位置
                 Vector2 offset = shakeDirections[pos] * shakeValue * currentAmplitude;
                 rect.anchoredPosition = originalPositions[pos] + offset;
+                
+                // 如果是未完全挖掉的格子，添加红色高亮
+                if (_damagedButNotMinedTiles.Contains(pos))
+                {
+                    Image image = tile.GetComponent<Image>();
+                    if (image != null && originalColors.ContainsKey(pos))
+                    {
+                        // 红色高亮与原色混合（闪烁效果）
+                        Color blendedColor = Color.Lerp(originalColors[pos], damageHighlightColor, highlightIntensity * 0.5f);
+                        image.color = blendedColor;
+                    }
+                }
             }
 
             yield return null;
@@ -708,7 +893,7 @@ public class MiningMapView : MonoBehaviour
             gridLayout.enabled = wasGridLayoutEnabled; // 恢复布局状态
         }
 
-        // 恢复原始位置（使用坐标从_tileMap重新查找GameObject）
+        // 恢复原始位置和颜色（使用坐标从_tileMap重新查找GameObject）
         foreach (var pos in tilePositions)
         {
             if (originalPositions.ContainsKey(pos))
@@ -720,6 +905,16 @@ public class MiningMapView : MonoBehaviour
                     if (rect != null)
                     {
                         rect.anchoredPosition = originalPositions[pos];
+                    }
+                    
+                    // 恢复原始颜色
+                    if (originalColors.ContainsKey(pos))
+                    {
+                        Image image = tile.GetComponent<Image>();
+                        if (image != null)
+                        {
+                            image.color = originalColors[pos];
+                        }
                     }
                 }
             }

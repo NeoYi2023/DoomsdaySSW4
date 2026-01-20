@@ -115,21 +115,31 @@ public class TurnManager : MonoBehaviour
             {
                 int currentLayerDepth = miningData.currentDepth >= 1 ? miningData.currentDepth : 1;
                 
-                // 先获取要攻击的格子列表（不造成伤害）
-                List<AttackedTileInfo> tilesToAttack = _miningManager.GetTilesToAttack(drill, currentLayerDepth);
+                // 先执行实际的挖矿逻辑（造成伤害），获取攻击结果
+                result = _miningManager.AttackOresInRange(drill, currentLayerDepth);
                 
-                // 播放晃动动画（如果有要攻击的格子）
-                if (tilesToAttack != null && tilesToAttack.Count > 0)
+                // 获取MiningMapView引用
+                MiningMapView miningMapView = FindObjectOfType<MiningMapView>();
+                
+                // 播放晃动动画（使用攻击结果中的格子信息，包含isFullyMined状态）
+                if (result != null && result.attackedTiles != null && result.attackedTiles.Count > 0)
                 {
-                    MiningMapView miningMapView = FindObjectOfType<MiningMapView>();
                     if (miningMapView != null)
                     {
-                        yield return miningMapView.PlayShakeAnimation(tilesToAttack);
+                        // 晃动动画（带红色高亮反馈）
+                        yield return miningMapView.PlayShakeAnimation(result.attackedTiles);
+                        
+                        // 播放金钱飞行特效（对于被完全挖掉的格子）
+                        MiningEffectsManager effectsManager = MiningEffectsManager.Instance;
+                        if (effectsManager != null)
+                        {
+                            yield return effectsManager.PlayMiningEffectSequence(result.attackedTiles, miningMapView);
+                        }
+                        
+                        // 刷新地图显示（更新已挖掉的格子）
+                        miningMapView.UpdateMap(currentLayerDepth);
                     }
                 }
-                
-                // 动画完成后，执行实际的挖矿逻辑（造成伤害）
-                result = _miningManager.AttackOresInRange(drill, currentLayerDepth);
                 
                 // 应用矿石发现能力加成（每回合额外发现矿石）
                 if (_energyManager != null)
@@ -143,9 +153,6 @@ public class TurnManager : MonoBehaviour
                 }
 
                 // 处理挖矿结果
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"TurnManager:145\",\"hypothesisId\":\"C\",\"message\":\"Mining result check\",\"data\":{{\"result_is_null\":{(result == null).ToString().ToLower()},\"moneyGained\":{result?.moneyGained ?? 0},\"energyGained\":{result?.energyGained ?? 0},\"energyManager_is_null\":{(_energyManager == null).ToString().ToLower()}}}}}\n"); } catch { }
-                // #endregion
                 if (result != null && (result.moneyGained > 0 || result.energyGained > 0))
                 {
                     Debug.Log($"本回合挖矿结果: 金钱 +{result.moneyGained}, 能源 +{result.energyGained}");
@@ -159,9 +166,6 @@ public class TurnManager : MonoBehaviour
                     // 能源累计
                     if (result.energyGained > 0)
                     {
-                        // #region agent log
-                        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"TurnManager:160\",\"hypothesisId\":\"C\",\"message\":\"Calling AddEnergy\",\"data\":{{\"energyGained\":{result.energyGained}}}}}\n"); } catch { }
-                        // #endregion
                         _energyManager.AddEnergy(result.energyGained);
                     }
                 }

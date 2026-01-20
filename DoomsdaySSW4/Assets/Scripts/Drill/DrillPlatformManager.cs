@@ -59,9 +59,6 @@ public class DrillPlatformManager : MonoBehaviour
     /// <param name="shipId">船只ID，用于获取初始造型配置</param>
     public void InitializePlatform(string shipId = "default_ship")
     {
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"DrillPlatformManager:62\",\"hypothesisId\":\"F\",\"message\":\"InitializePlatform called\",\"data\":{{\"shipId\":\"{shipId}\",\"instanceId\":\"{GetInstanceID()}\"}}}}\n"); } catch { }
-        // #endregion
         if (_configManager == null)
         {
             _configManager = ConfigManager.Instance;
@@ -99,9 +96,6 @@ public class DrillPlatformManager : MonoBehaviour
             Debug.Log($"未配置初始钻头，自动放置第一个造型在中心");
         }
         
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"DrillPlatformManager:100\",\"hypothesisId\":\"F\",\"message\":\"InitializePlatform finished\",\"data\":{{\"instanceId\":\"{GetInstanceID()}\",\"placedShapes_count\":{_platformData?.placedShapes?.Count ?? -1},\"availableShapeIds_count\":{_platformData?.availableShapeIds?.Count ?? -1}}}}}\n"); } catch { }
-        // #endregion
         OnPlatformChanged?.Invoke();
     }
     
@@ -443,9 +437,6 @@ public class DrillPlatformManager : MonoBehaviour
     /// </summary>
     public List<PlacedDrillShape> GetPlacedShapes()
     {
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"DrillPlatformManager:442\",\"hypothesisId\":\"F\",\"message\":\"GetPlacedShapes called\",\"data\":{{\"instanceId\":\"{GetInstanceID()}\",\"platformData_is_null\":{(_platformData == null).ToString().ToLower()},\"placedShapes_count\":{_platformData?.placedShapes?.Count ?? -1}}}}}\n"); } catch { }
-        // #endregion
         if (_platformData == null) return new List<PlacedDrillShape>();
         return new List<PlacedDrillShape>(_platformData.placedShapes);
     }

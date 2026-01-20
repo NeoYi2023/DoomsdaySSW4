@@ -599,8 +599,21 @@ public class OreSpawnRule
     public int weight;                // 出现权重
     public int maxCount;              // 最大出现数量
     public float spawnProbability;    // 生成概率（可选，基于权重计算）
+    public int @default;              // 是否为该层的默认矿石（1=默认，0=非默认）
 }
 ```
+
+#### 3.10.2 矿石生成规则中的默认矿石逻辑（default）
+
+- 在 `OreSpawnConfigs` 配置表中为每条规则增加一列 `default`（整型，0/1）：
+  - `default = 1` 表示该矿石为该层的**默认矿石类型**
+  - `default = 0` 表示普通矿石规则
+- 生成流程：
+  1. 正常按权重随机选出 `selectedRule`
+  2. 如果 `selectedRule` 的 `maxCount` 已经达到上限，则不再使用该规则生成矿石
+  3. 此时会在同一 `layerDepth` 中查找 `default = 1` 的规则，作为**兜底矿石类型**
+  4. 默认矿石依然会受自身 `minDepth/maxDepth` 约束，但**不会再受 `maxCount` 限制**（可以无限生成）
+  5. 如果不存在 `default = 1` 的规则，则该格子生成失败，保持为岩石格（`TileType.Rock`）
 
 ### 3.11 钻头造型系统数据结构
 
@@ -1012,6 +1025,176 @@ public class EnergyProgressBar : MonoBehaviour
 - 进度条组件通过委托方式从 `EnergyUpgradeManager` 获取数据，避免直接依赖
 - 在 `GameScreen.UpdateUI()` 中每帧调用 `UpdateProgress()` 更新显示
 - 可选：订阅能源变化事件，仅在能源值变化时更新，减少性能开销
+
+### 3.18.2 矿石视觉系统
+
+矿石视觉系统为每种矿石提供独特的图片素材显示，替代原有的纯色背景。
+
+#### 3.18.2.1 素材目录结构
+
+```
+DoomsdaySSW4/Assets/UI/
+├── Ores/                        # 矿石素材目录
+│   ├── ore_iron.png            # 铁矿石 - 灰褐色金属质感
+│   ├── ore_gold.png            # 金矿石 - 金黄色闪光
+│   ├── ore_diamond.png         # 钻石 - 蓝白色透明晶体
+│   ├── ore_crystal.png         # 水晶 - 紫色/粉色透明
+│   └── ore_energy_core.png     # 能源核心 - 绿色发光
+└── Icons/                       # 图标素材目录
+    └── coin.png                # 金币图标（用于飞行动画）
+```
+
+#### 3.18.2.2 配置表扩展
+
+`OreConfigs.csv` 新增 `spritePath` 字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| spritePath | string | 矿石图片资源路径（不含扩展名，相对于Resources目录） |
+
+示例：
+```csv
+oreId,oreName,oreType,hardness,...,spritePath
+iron,铁矿石,Common,10,...,UI/Ores/ore_iron
+gold,金矿石,Rare,20,...,UI/Ores/ore_gold
+```
+
+#### 3.18.2.3 数据结构扩展
+
+```csharp
+[Serializable]
+public class OreConfig
+{
+    // ... 现有字段 ...
+    public string spritePath;    // 矿石图片资源路径
+}
+```
+
+#### 3.18.2.4 瓦片渲染逻辑
+
+`MiningMapView.CreateTile()` 渲染优先级：
+1. **已挖掘格子**：显示深灰色背景
+2. **空格/岩石**：显示对应颜色背景
+3. **矿石格子**：
+   - 如果有 `spritePath`：加载并显示矿石图片
+   - 如果没有 `spritePath`：回退到根据硬度显示颜色
+
+### 3.18.3 挖矿动效系统（扩展）
+
+挖矿动效系统提供完整的视觉反馈，包括晃动、高亮和金钱飞行动画。
+
+#### 3.18.3.1 动效流程时序
+
+```
+T=0.0s  │ 钻机攻击开始
+        ↓
+T=0.0s  │ 被攻击格子开始晃动（持续0.5秒）
+        │ - 完全挖掉的格子：正常晃动
+        │ - 未完全挖掉的格子：晃动 + 红色高亮闪烁
+        ↓
+T=0.5s  │ 晃动结束
+        ↓
+T=0.7s  │ 被完全挖掉的格子消失（0.2秒延迟后）
+        │ 在原位置生成矿石图标
+        ↓
+T=1.0s  │ 矿石图标变为金币图标（0.3秒后）
+        ↓
+T=1.0s~ │ 金币图标飞向金钱显示位置
+        │ 到达后销毁，回合逻辑继续
+```
+
+#### 3.18.3.2 晃动特效参数
+
+```csharp
+// MiningMapView 晃动配置
+[Header("晃动动效设置")]
+float shakeDuration = 0.5f;      // 晃动持续时间
+float shakeAmplitude = 4.8f;     // 晃动幅度（像素）
+float shakeFrequency = 12f;      // 晃动频率（次/秒）
+```
+
+- **晃动范围**：仅被攻击的格子晃动，其他格子保持原位
+- **同步机制**：相同攻击强度的格子完全同步晃动
+
+#### 3.18.3.3 红色高亮特效
+
+当矿石未被完全挖掉时（`hardness > 0`），在晃动期间显示红色高亮：
+
+```csharp
+// 红色高亮参数
+Color damageHighlightColor = new Color(1f, 0f, 0f, 0.4f); // 红色半透明
+```
+
+- **触发条件**：`tile.hardness > 0`（攻击后仍有剩余血量）
+- **显示时机**：与晃动同步，晃动结束后恢复原色
+- **混合方式**：与基础颜色进行 Lerp 混合
+
+#### 3.18.3.4 金钱飞行动画
+
+被完全挖掉的矿石执行金钱飞行动画：
+
+```csharp
+// 动画时间参数
+float tileDisappearDelay = 0.2f;    // 晃动结束后延迟消失
+float oreIconDuration = 0.3f;       // 矿石图标显示时间
+float coinFlyDuration = 0.5f;       // 金币飞行时间
+
+// 飞行动画使用缓动曲线
+AnimationCurve flyCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+```
+
+- **矿石图标**：使用矿石的 `spritePath` 加载对应素材
+- **金币图标**：使用 `UI/Icons/coin` 统一素材
+- **飞行目标**：`GameScreen.moneyText` 的 RectTransform 位置
+
+#### 3.18.3.5 AttackedTileInfo 数据结构扩展
+
+```csharp
+[System.Serializable]
+public class AttackedTileInfo
+{
+    public Vector2Int position;       // 格子坐标
+    public int attackStrength;        // 攻击强度值
+    public bool isFullyMined;         // 是否完全挖掉
+    public int remainingHardness;     // 剩余硬度（用于显示）
+    public string oreId;              // 矿石ID（用于加载图标）
+    public int moneyValue;            // 金钱价值（用于飞行动画）
+}
+```
+
+#### 3.18.3.6 MiningEffectsManager 组件
+
+```csharp
+/// <summary>
+/// 挖矿特效管理器：协调所有挖矿视觉特效
+/// </summary>
+public class MiningEffectsManager : MonoBehaviour
+{
+    [Header("素材引用")]
+    [SerializeField] private Sprite coinSprite;           // 金币图标
+    [SerializeField] private RectTransform moneyUITarget; // 金钱显示位置
+    
+    [Header("动画参数")]
+    [SerializeField] private float tileDisappearDelay = 0.2f;
+    [SerializeField] private float oreIconDuration = 0.3f;
+    [SerializeField] private float coinFlyDuration = 0.5f;
+    
+    /// <summary>
+    /// 播放完整的挖矿特效序列
+    /// </summary>
+    public IEnumerator PlayMiningEffectSequence(
+        List<AttackedTileInfo> minedTiles,
+        MiningMapView miningMapView)
+    
+    /// <summary>
+    /// 播放单个格子的金钱飞行动画
+    /// </summary>
+    private IEnumerator PlayCoinFlyAnimation(
+        Vector2 startPosition,
+        string oreId,
+        int moneyValue)
+}
+```
 
 ### 3.19 信用积分系统数据结构
 
@@ -2947,6 +3130,7 @@ string text = LocalizationManager.Instance.GetLocalizedString("ui.menu.start");
 | - | 1.8 | 更新挖矿地图尺寸：从9x7改为9x9网格，钻头中心点从(4,3)更新为(4,4) | - |
 | - | 1.9 | 添加挖矿地图高亮规则：在攻击范围内的格子高亮显示，范围外的格子变暗显示；添加UI自适应规则、Canvas保持激活规则、字体显示规则 | - |
 | - | 1.10 | 添加动态中文字体加载系统：实现按需生成字符的动态字体模式，支持内存优化配置，集成到GameInitializer初始化流程，添加字体管理模块和完整API接口 | - |
+| - | 1.11 | 添加矿石视觉系统和挖矿动效系统扩展：矿石图片素材配置、晃动特效、红色高亮反馈、金钱飞行动画 | - |
 
 ---
 

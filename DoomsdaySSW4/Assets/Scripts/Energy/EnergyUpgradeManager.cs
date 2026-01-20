@@ -135,9 +135,6 @@ public class EnergyUpgradeManager : MonoBehaviour
     /// </summary>
     public void AddEnergy(int amount)
     {
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"EnergyUpgradeManager:136\",\"hypothesisId\":\"C\",\"message\":\"AddEnergy called\",\"data\":{{\"amount\":{amount},\"energyData_is_null\":{(_energyData == null).ToString().ToLower()},\"currentEnergy_before\":{_energyData?.currentEnergy ?? 0}}}}}\n"); } catch { }
-        // #endregion
         if (_energyData == null)
         {
             InitializeEnergyData();
@@ -147,9 +144,6 @@ public class EnergyUpgradeManager : MonoBehaviour
         _energyData.totalEnergyCollected += amount;
 
         Debug.Log($"获得能源: +{amount}, 当前能源: {_energyData.currentEnergy}");
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"EnergyUpgradeManager:148\",\"hypothesisId\":\"C\",\"message\":\"Energy added\",\"data\":{{\"amount\":{amount},\"currentEnergy_after\":{_energyData.currentEnergy}}}}}\n"); } catch { }
-        // #endregion
 
         // 检查是否达到阈值
         CheckEnergyThreshold();

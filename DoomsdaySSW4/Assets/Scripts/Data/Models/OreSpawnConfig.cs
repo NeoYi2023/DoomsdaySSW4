@@ -21,6 +21,7 @@ public class OreSpawnRule
     public int weight;                // 出现权重
     public int maxCount;              // 最大出现数量
     public float spawnProbability;    // 生成概率（可选，基于权重计算）
+    public int @default;              // 是否为该层的默认矿石（1=默认，0=非默认）
 }
 
 /// <summary>

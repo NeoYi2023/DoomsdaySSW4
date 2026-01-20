@@ -149,7 +149,7 @@ public class MiningManager : MonoBehaviour
                 layer.tiles.Add(tile);
             }
         }
-
+        
         return layer;
     }
 
@@ -192,9 +192,30 @@ public class MiningManager : MonoBehaviour
         {
             oreTypeCounts[selectedRule.oreId] = 0;
         }
+
+        bool useDefaultFallback = false;
+
         if (oreTypeCounts[selectedRule.oreId] >= selectedRule.maxCount)
         {
-            return null;
+            // 已达到最大数量，尝试使用default规则作为兜底矿石（不再受maxCount限制）
+            OreSpawnRule defaultRule = spawnConfig.spawnRules.FirstOrDefault(r => r.@default == 1);
+            if (defaultRule != null)
+            {
+                selectedRule = defaultRule;
+
+                // 确保default矿石在计数字典中存在（仅用于统计，不再检查maxCount）
+                if (!oreTypeCounts.ContainsKey(selectedRule.oreId))
+                {
+                    oreTypeCounts[selectedRule.oreId] = 0;
+                }
+
+                useDefaultFallback = true;
+            }
+            else
+            {
+                // 没有default配置，仍然返回null
+                return null;
+            }
         }
 
         // 获取矿石配置
@@ -207,7 +228,7 @@ public class MiningManager : MonoBehaviour
             return null;
         }
 
-        // 增加计数器
+        // 增加计数器（default矿石只做统计，不再受maxCount限制）
         oreTypeCounts[selectedRule.oreId]++;
 
         // 创建矿石数据
@@ -223,6 +244,7 @@ public class MiningManager : MonoBehaviour
             value = oreConfig.value,
             isEnergyOre = oreConfig.isEnergyOre,
             energyValue = oreConfig.energyValue,
+            spritePath = oreConfig.spritePath,
             position = new Vector2Int(x, y),
             depth = layerDepth,
             isMined = false
@@ -295,6 +317,7 @@ public class MiningManager : MonoBehaviour
             value = oreConfig.value,
             isEnergyOre = oreConfig.isEnergyOre,
             energyValue = oreConfig.energyValue,
+            spritePath = oreConfig.spritePath,
             position = new Vector2Int(x, y),
             depth = layerDepth,
             isMined = false
@@ -350,6 +373,7 @@ public class MiningManager : MonoBehaviour
             value = config.value,
             isEnergyOre = config.isEnergyOre,
             energyValue = config.energyValue,
+            spritePath = config.spritePath,
             position = new Vector2Int(x, y),
             depth = layerDepth,
             isMined = tile.isMined
@@ -503,9 +527,6 @@ public class MiningManager : MonoBehaviour
 
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
         Dictionary<Vector2Int, CellAttackInfo> attackMap = calculator.CalculateAttackMap(drill);
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"MiningManager:505\",\"hypothesisId\":\"E\",\"message\":\"AttackOresWithShapeSystem start\",\"data\":{{\"layerDepth\":{layerDepth},\"attackMap_count\":{attackMap?.Count},\"drill_usesShapeSystem\":{drill?.UsesShapeSystem()}}}}}\n"); } catch { }
-        // #endregion
 
         foreach (var kvp in attackMap)
         {
@@ -532,21 +553,30 @@ public class MiningManager : MonoBehaviour
 
             // 对矿石造成伤害
             tile.hardness -= finalAttackValue;
+            
+            // 获取矿石配置（用于记录矿石信息）
+            OreConfig oreConfig = _configManager.GetOreConfig(GetOreIdFromMineralType(tile.mineralType));
+            string currentOreId = oreConfig?.oreId ?? "";
+            int oreValue = oreConfig?.value ?? 0;
+            
+            // 判断是否完全挖掉
+            bool isFullyMined = tile.hardness <= 0;
 
             // 记录被攻击的格子信息（用于动效）
             result.attackedTiles.Add(new AttackedTileInfo
             {
                 position = pos,
-                attackStrength = finalAttackValue
+                attackStrength = finalAttackValue,
+                isFullyMined = isFullyMined,
+                remainingHardness = Mathf.Max(0, tile.hardness),
+                oreId = currentOreId,
+                moneyValue = isFullyMined ? oreValue : 0
             });
 
             // 如果硬度归零，挖掉矿石
-            if (tile.hardness <= 0)
+            if (isFullyMined)
             {
                 OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"MiningManager:540\",\"hypothesisId\":\"A\",\"message\":\"GetOreAtPosition result\",\"data\":{{\"pos_x\":{pos.x},\"pos_y\":{pos.y},\"layerDepth\":{layerDepth},\"ore_is_null\":{(ore == null).ToString().ToLower()},\"ore_id\":\"{ore?.oreId}\",\"ore_isEnergyOre\":{(ore?.isEnergyOre ?? false).ToString().ToLower()},\"ore_energyValue\":{ore?.energyValue ?? 0}}}}}\n"); } catch { }
-                // #endregion
                 if (ore != null)
                 {
                     tile.isMined = true;
@@ -561,9 +591,6 @@ public class MiningManager : MonoBehaviour
                     // 累计金钱和能源
                     if (ore.isEnergyOre)
                     {
-                        // #region agent log
-                        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"MiningManager:555\",\"hypothesisId\":\"B\",\"message\":\"Energy ore mined!\",\"data\":{{\"ore_id\":\"{ore.oreId}\",\"energyValue\":{ore.energyValue},\"result_energyGained_before\":{result.energyGained}}}}}\n"); } catch { }
-                        // #endregion
                         result.energyGained += ore.energyValue;
                     }
                     else
@@ -583,10 +610,7 @@ public class MiningManager : MonoBehaviour
                 }
             }
         }
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"MiningManager:590\",\"hypothesisId\":\"E\",\"message\":\"AttackOresWithShapeSystem end\",\"data\":{{\"moneyGained\":{result.moneyGained},\"energyGained\":{result.energyGained},\"minedOres_count\":{result.minedOres?.Count}}}}}\n"); } catch { }
-        // #endregion
-
+        
         return result;
     }
 
@@ -647,16 +671,28 @@ public class MiningManager : MonoBehaviour
 
                 // 对矿石造成伤害
                 tile.hardness -= attackValue;
+                
+                // 获取矿石配置（用于记录矿石信息）
+                OreConfig legacyOreConfig = _configManager.GetOreConfig(GetOreIdFromMineralType(tile.mineralType));
+                string legacyOreId = legacyOreConfig?.oreId ?? "";
+                int legacyOreValue = legacyOreConfig?.value ?? 0;
+                
+                // 判断是否完全挖掉
+                bool legacyIsFullyMined = tile.hardness <= 0;
 
                 // 记录被攻击的格子信息（用于动效）
                 result.attackedTiles.Add(new AttackedTileInfo
                 {
                     position = new Vector2Int(x, y),
-                    attackStrength = attackValue
+                    attackStrength = attackValue,
+                    isFullyMined = legacyIsFullyMined,
+                    remainingHardness = Mathf.Max(0, tile.hardness),
+                    oreId = legacyOreId,
+                    moneyValue = legacyIsFullyMined ? legacyOreValue : 0
                 });
 
                 // 如果硬度归零，挖掉矿石
-                if (tile.hardness <= 0)
+                if (legacyIsFullyMined)
                 {
                     OreData ore = GetOreAtPosition(layerDepth, x, y);
                     if (ore != null)
@@ -932,7 +968,11 @@ public class MiningManager : MonoBehaviour
 public class AttackedTileInfo
 {
     public Vector2Int position;       // 格子坐标
-    public int attackStrength;       // 攻击强度值
+    public int attackStrength;        // 攻击强度值
+    public bool isFullyMined;         // 是否完全挖掉
+    public int remainingHardness;     // 剩余硬度（攻击后）
+    public string oreId;              // 矿石ID（用于加载图标）
+    public int moneyValue;            // 金钱价值（用于飞行动画）
 }
 
 /// <summary>

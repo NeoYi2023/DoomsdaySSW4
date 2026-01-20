@@ -432,7 +432,9 @@ public class ExcelToJsonConverter : EditorWindow
                     energyValue = GetInt(row, "energyValue"),
                     minDepth = GetInt(row, "minDepth"),
                     maxDepth = GetInt(row, "maxDepth"),
-                    spawnProbability = GetFloat(row, "spawnProbability")
+                    spawnProbability = GetFloat(row, "spawnProbability"),
+                    spritePath = GetString(row, "spritePath"),
+                    latticeSpritePath = GetString(row, "latticeSpritePath")
                 };
                 ores.Add(ore);
             }
@@ -474,7 +476,8 @@ public class ExcelToJsonConverter : EditorWindow
                     oreId = GetString(row, "oreId"),
                     weight = GetInt(row, "weight"),
                     maxCount = GetInt(row, "maxCount"),
-                    spawnProbability = GetFloat(row, "spawnProbability")
+                    spawnProbability = GetFloat(row, "spawnProbability"),
+                    @default = GetInt(row, "default")
                 };
 
                 layerDict[layerDepth].spawnRules.Add(rule);

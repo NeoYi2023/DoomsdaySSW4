@@ -60,9 +60,6 @@ public class DrillAttackCalculator : MonoBehaviour
         foreach (var placedShape in placedShapes)
         {
             DrillShapeConfig config = _configManager.GetDrillShapeConfig(placedShape.shapeId);
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"timestamp\":\"{System.DateTime.Now:o}\",\"location\":\"DrillAttackCalculator:63\",\"hypothesisId\":\"I\",\"message\":\"GetDrillShapeConfig result\",\"data\":{{\"shapeId\":\"{placedShape.shapeId}\",\"config_is_null\":{(config == null).ToString().ToLower()}}}}}\n"); } catch { }
-            // #endregion
             if (config == null) continue;
             
             List<Vector2Int> occupiedCells = placedShape.GetOccupiedCells(config);

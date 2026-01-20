@@ -64,6 +64,7 @@
     <Compile Include="Assets\Editor\SetChineseFont.cs" />
     <Compile Include="Assets\Editor\ExcelToJsonConverter.cs" />
     <Compile Include="Assets\Editor\GameRuntimeChecker.cs" />
+    <Compile Include="Assets\Editor\OreAssetGenerator.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

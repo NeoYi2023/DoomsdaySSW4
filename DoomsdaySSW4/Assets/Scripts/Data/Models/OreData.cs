@@ -27,6 +27,10 @@ public class OreData
     public bool isEnergyOre;                  // 是否为能源矿石
     public int energyValue;                   // 能源值
 
+    // 视觉相关
+    public string spritePath;                 // 矿石图标路径（飞行动画用）
+    public string latticeSpritePath;          // 矿石格子路径（地图显示用）
+
     // 位置信息
     public Vector2Int position;               // 在地图中的坐标
     public int depth;                         // 所在层数
@@ -59,6 +63,8 @@ public class OreConfig
     public int minDepth;
     public int maxDepth;
     public float spawnProbability;            // 出现概率（权重化前可选）
+    public string spritePath;                 // 矿石图标路径（飞行动画用）
+    public string latticeSpritePath;          // 矿石格子路径（地图显示用）
 }
 
 /// <summary>

@@ -12,7 +12,9 @@
             "energyValue": 0,
             "minDepth": 1,
             "maxDepth": 5,
-            "spawnProbability": 0.0
+            "spawnProbability": 0.0,
+            "spritePath": "UI/Ores/ore_iron",
+            "latticeSpritePath": "UI/Lattice/Lattice_iron"
         },
         {
             "oreId": "gold",
@@ -26,7 +28,9 @@
             "energyValue": 0,
             "minDepth": 2,
             "maxDepth": 10,
-            "spawnProbability": 0.0
+            "spawnProbability": 0.0,
+            "spritePath": "UI/Ores/ore_gold",
+            "latticeSpritePath": "UI/Lattice/Lattice_gold"
         },
         {
             "oreId": "diamond",
@@ -40,7 +44,9 @@
             "energyValue": 0,
             "minDepth": 4,
             "maxDepth": 10,
-            "spawnProbability": 0.0
+            "spawnProbability": 0.0,
+            "spritePath": "UI/Ores/ore_diamond",
+            "latticeSpritePath": "UI/Lattice/Lattice_diamond"
         },
         {
             "oreId": "crystal",
@@ -54,7 +60,9 @@
             "energyValue": 0,
             "minDepth": 3,
             "maxDepth": 9,
-            "spawnProbability": 0.0
+            "spawnProbability": 0.0,
+            "spritePath": "UI/Ores/ore_crystal",
+            "latticeSpritePath": "UI/Lattice/Lattice_crystal"
         },
         {
             "oreId": "energy_core",
@@ -68,7 +76,9 @@
             "energyValue": 10,
             "minDepth": 1,
             "maxDepth": 10,
-            "spawnProbability": 0.0
+            "spawnProbability": 0.0,
+            "spritePath": "UI/Ores/ore_energy_core",
+            "latticeSpritePath": "UI/Lattice/Lattice_energy_core"
         }
     ]
 }
