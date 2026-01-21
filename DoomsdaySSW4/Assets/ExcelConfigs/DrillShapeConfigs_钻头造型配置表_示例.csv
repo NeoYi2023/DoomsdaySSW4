@@ -1,11 +1,11 @@
-shapeId,shapeName,baseAttackStrength,cells,traits,description
-shape_single,µ¥µã×êÍ·,30,"0,0",,×î»ù´¡µÄµ¥¸ñ×êÍ·£¬¹¥»÷Á¦¼¯ÖĞ
-shape_cross_small,Ê®×Ö×êÍ·,15,"0,0;-1,0;1,0;0,-1;0,1",,Ê®×ÖĞÎ5¸ñ×êÍ·£¬¸²¸Ç·¶Î§¹ã
-shape_line_3,Ö±Ïß×êÍ·,15,"-1,0;0,0;1,0","[{""traitId"":""line_bonus"",""traitName"":""´©Í¸Ç¿»¯"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.1,""description"":""Ö±Ïß¹¥»÷Ê±¹¥»÷Á¦+10%""}]",ºáÏò3¸ñ£¬×Ô´ø10%¹¥»÷¼Ó³É
-shape_L,LĞÍ×êÍ·,15,"0,0;0,1;0,2;1,2",,LĞÎ4¸ñ×êÍ·£¬¿ÉÁé»îĞı×ªÊÊÓ¦µØĞÎ
-shape_T,TĞÍ×êÍ·,15,"-1,0;0,0;1,0;0,1",,TĞÎ4¸ñ×êÍ·£¬Æ½ºâµÄ¸²¸Ç·¶Î§
-shape_square_2x2,·½¿é×êÍ·,15,"0,0;1,0;0,1;1,1","[{""traitId"":""square_stability"",""traitName"":""ÎÈ¶¨½á¹¹"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.05,""description"":""·½ĞÎ½á¹¹Ìá¹©5%¹¥»÷¼Ó³É""}]",2x2·½ĞÎ×êÍ·£¬½á¹¹ÎÈ¶¨
-shape_Z,ZĞÍ×êÍ·,15,"-1,1;0,1;0,0;1,0",,ZĞÎ4¸ñ×êÍ·£¬´íÎ»²¼¾Ö
-shape_S,SĞÍ×êÍ·,15,"1,1;0,1;0,0;-1,0",,SĞÎ4¸ñ×êÍ·£¬ÓëZĞÍ¾µÏñ
-shape_line_4,³¤Ìõ×êÍ·,15,"-1,0;0,0;1,0;2,0","[{""traitId"":""line_4_bonus"",""traitName"":""Éî¶È´©Í¸"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.15,""description"":""³¤Ìõ¹¥»÷Ê±¹¥»÷Á¦+15%""}]",ºáÏò4¸ñ³¤Ìõ£¬´©Í¸ÄÜÁ¦Ç¿
-shape_energy_extractor,ÄÜÔ´ÌáÈ¡Æ÷,20,"0,0;1,0;-1,0","[{""traitId"":""energy_bonus"",""traitName"":""ÄÜÔ´Ç×ºÍ"",""triggerCondition"":""ore_type:energy"",""effectType"":""attack_multiplier"",""effectValue"":1.5,""description"":""ÍÚ¾òÄÜÔ´¿óÊ¯Ê±¹¥»÷Á¦+50%""}]",×¨ÃÅÓÃÓÚÍÚ¾òÄÜÔ´¿óÊ¯µÄ×êÍ·
+ï»¿shapeId,shapeName,baseAttackStrength,cells,traits,description
+shape_single,å•æ ¼é’»å¤´,30,"0,0",,æœ€åŸºç¡€çš„å•æ ¼é’»å¤´ï¼Œä¾¿äºç†è§£ä¼¤å®³èŒƒå›´
+shape_cross_small,åå­—é’»å¤´,15,"0,0;-1,0;1,0;0,-1;0,1",,åå­—å½¢5æ ¼é’»å¤´ï¼Œè¦†ç›–ä¸Šä¸‹å·¦å³å››ä¸ªæ–¹å‘
+shape_line_3,ç›´çº¿é’»å¤´,15,"-1,0;0,0;1,0","[{""traitId"":""line_bonus"",""traitName"":""è´¯é€šå¼ºåŒ–"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.1,""description"":""ç›´çº¿è´¯é€šæ—¶ä¼¤å®³+10%""}]",ç›´çº¿3æ ¼é’»å¤´ï¼Œæ‹¥æœ‰10%é¢å¤–ä¼¤å®³åŠ æˆ
+shape_L,Lå½¢é’»å¤´,15,"0,0;0,1;0,2;1,2",,Lå½¢4æ ¼é’»å¤´ï¼Œé€‚åˆå¤„ç†æ‹è§’åŒºåŸŸ
+shape_T,Tå½¢é’»å¤´,15,"-1,0;0,0;1,0;0,1",,Tå½¢4æ ¼é’»å¤´ï¼Œè¦†ç›–å‰æ–¹è¾ƒå®½åŒºåŸŸ
+shape_square_2x2,æ–¹å—é’»å¤´,15,"0,0;1,0;0,1;1,1","[{""traitId"":""square_stability"",""traitName"":""ç¨³å®šç»“æ„"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.05,""description"":""æ–¹å—ç»“æ„æä¾›5%é¢å¤–ä¼¤å®³åŠ æˆ""}]",2x2æ–¹å—é’»å¤´ï¼Œç»“æ„ç¨³å®š
+shape_Z,Zå½¢é’»å¤´,15,"-1,1;0,1;0,0;1,0",,Zå½¢4æ ¼é’»å¤´ï¼Œé€‚åˆæ–œå‘æ¨è¿›
+shape_S,Så½¢é’»å¤´,15,"1,1;0,1;0,0;-1,0",,Så½¢4æ ¼é’»å¤´ï¼Œä¸Zå½¢äº’ä¸ºé•œåƒ
+shape_line_4,é•¿çº¿é’»å¤´,15,"-1,0;0,0;1,0;2,0","[{""traitId"":""line_4_bonus"",""traitName"":""æ·±åº¦è´¯é€š"",""triggerCondition"":""always"",""effectType"":""attack_multiplier"",""effectValue"":1.15,""description"":""è¿ç»­4æ ¼è´¯é€šæ—¶ä¼¤å®³+15%""}]",é•¿åº¦ä¸º4çš„ç›´çº¿é’»å¤´ï¼Œè´¯é€šèƒ½åŠ›æ›´å¼º
+shape_energy_extractor,èƒ½æºæå–é’»,20,"0,0;1,0;-1,0","[{""traitId"":""energy_bonus"",""traitName"":""èƒ½æºæ”¶å‰²"",""triggerCondition"":""ore_type:energy"",""effectType"":""attack_multiplier"",""effectValue"":1.5,""description"":""åœ¨èƒ½æºçŸ¿çŸ³ä¸Šæ—¶ä¼¤å®³+50%""}]",ä¸“é—¨ç”¨äºæå–èƒ½æºçŸ¿çŸ³çš„é’»å¤´

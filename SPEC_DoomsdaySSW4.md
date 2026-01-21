@@ -942,12 +942,51 @@ public class EnergyUpgrade
 public enum UpgradeOptionType
 {
     DrillStrength,      // 挖掘强度提升
-    DrillRange,         // 挖掘范围提升
-    MiningEfficiency,    // 挖掘效率提升
+    MiningEfficiency,   // 挖掘效率提升
     OreDiscovery,       // 矿石发现能力提升
-    OreValueBoost        // 矿石价值提升
+    OreValueBoost,      // 矿石价值提升
+    DrillShapeUnlock    // 解锁钻头造型（将指定造型加入当前关卡可用库存）
 }
 ```
+
+#### 3.18.3 能源升级与钻头造型联动
+
+- 能源三选一升级除了数值类升级（强度、效率、矿石价值、勘探能力）外，还支持一种**解锁钻头造型**的升级类型：
+  - 当玩家选择 `DrillShapeUnlock` 类型的升级选项时：
+    - 该升级的 `upgradeId` 与某个 `DrillShapeConfig.shapeId` 一一对应；
+    - 当前关卡的 `DrillPlatformData.availableShapeIds` 中追加此 `shapeId`（若尚未存在），表示本关内可在钻机平台上装配该造型。
+    - 解锁逻辑通过 `EnergyUpgradeManager.ApplyUpgradeEffect(UpgradeOptionType.DrillShapeUnlock)` 调用 `DrillPlatformManager.AddShapeToInventory(shapeId)` 实现，要求钻机平台已完成初始化（存在当前关卡的平台数据）。
+    - 若在能源升级触发时平台尚未初始化，实现上需要保证**延迟添加**或**自动初始化平台后再添加**，以避免“UI 中看不到新解锁造型、无法摆放”的情况。
+- 同一造型只需要解锁一次即可进入库存，后续再出现相同解锁项时可以：
+  - 直接从候选池中过滤（不再出现在三选一中），或
+  - 将其视为普通数值类升级（可在具体实现中调整，推荐前者以保持规则清晰）。
+- 能源升级记录 `EnergyUpgrade.upgradeId` 用于追踪本关已获得的造型解锁和数值加成，便于存档和回放。
+
+#### 3.18.4 能源三选一与钻机编辑界面联动规则
+
+- **联动目标**：当玩家通过能源三选一选择 `DrillShapeUnlock` 类型的升级选项、成功解锁新的钻头造型后，引导玩家立即前往钻机编辑界面调整平台布局，提升“拿到新造型立刻上手”的体验。
+- **基本流程**：
+  1. 能源达到阈值，`EnergyUpgradeManager` 触发三选一界面，`UpgradeSelectionScreen.ShowUpgradeOptions(options)` 弹出。
+  2. 玩家在三选一界面点击某个选项（包括 `DrillShapeUnlock` 在内），`UpgradeSelectionScreen.OnOptionSelected(index)` 被调用。
+  3. `OnOptionSelected` 调用 `GameManager.ApplyUpgradeSelection(selectedOption)`，由 `EnergyUpgradeManager.SelectUpgrade(selectedOption)` 负责：
+     - 记录本关升级；
+     - 调用 `EnergyUpgradeManager.ApplyUpgradeEffect(selectedOption)`；
+     - 当 `selectedOption.type == DrillShapeUnlock` 时，通过 `DrillPlatformManager.AddShapeToInventory(shapeId)` 将对应 `shapeId` 写入当前关卡的 `DrillPlatformData.availableShapeIds`。
+  4. 三选一界面按原有逻辑关闭，并通过 `GameManager.ResumeGame()` 恢复游戏流程。
+  5. **仅当本次选择的选项类型为 `DrillShapeUnlock` 时**，`UpgradeSelectionScreen.OnOptionSelected` 在关闭三选一界面之后，尝试自动打开钻机编辑界面：
+     - 通过场景中查找（例如 `FindObjectOfType<DrillEditorScreen>(true)`）获取钻机编辑界面实例 `_drillEditorScreen`；
+     - 调用 `_drillEditorScreen.CanEdit()` 判断当前是否允许编辑钻头（例如：未开启自动挖矿，且当前不在“回合结算动画处理中”等状态）；
+     - 若允许编辑，则调用 `_drillEditorScreen.Show()` 打开钻机编辑界面，让玩家立即在 9x9 平台上布置新解锁的造型；
+     - 若当前不允许编辑（如自动挖矿中或回合处理中），则本次不会自动打开，仅记录日志提示，玩家可以稍后通过主界面的“编辑钻头”按钮手动进入。
+- **设计约束**：
+  - 该联动逻辑 **只对 `DrillShapeUnlock` 类型生效**，其他数值类升级（如 `DrillStrength`、`MiningEfficiency` 等）不会自动打开钻机编辑界面，以避免频繁打断流程。
+  - 自动打开钻机编辑界面的前提是三选一界面已经完成升级应用并关闭，避免 UI 相互覆盖或交互冲突。
+  - 不改变原有的钻机平台数据结构和存档格式，联动仅发生在 UI 层的交互流程中。
+- **接口与调用关系补充**：
+  - `UpgradeSelectionScreen.OnOptionSelected(EnergyUpgradeOption selectedOption)`：
+    - 负责调用 `GameManager.ApplyUpgradeSelection(selectedOption)` 完成升级应用；
+    - 在 `selectedOption.type == UpgradeOptionType.DrillShapeUnlock` 且 `_drillEditorScreen.CanEdit()` 返回 true 时，直接调用 `_drillEditorScreen.Show()`。
+  - `DrillEditorScreen.CanEdit()`：用于约束是否允许当前帧打开编辑界面（如：禁止在自动挖矿或回合处理中打开），三选一 → 编辑界面的联动必须遵守该规则。
 
 ### 3.18.1 能源升级进度条UI设计
 
@@ -2565,6 +2604,148 @@ UI系统
   - 获得信用积分
   - 使用信用积分进行永久增强
 
+**钻机平台编辑交互（钻头造型系统）**：
+
+- 钻机编辑界面允许玩家在回合之间调整 9x9 钻机平台上的造型布局，具体交互规则：
+  - **库存与平台联动**：
+    - 库存列表显示当前关卡可用的所有钻头造型（来源包括：船只初始配置、任务/事件奖励、能源升级 `DrillShapeUnlock` 解锁等）；
+    - 平台上放置的造型会从库存中移除；移除平台造型时会将对应 `shapeId` 重新放回库存（即：**每次成功放置视为从库存中消耗 1 个该造型，移除则返还 1 个**，库存数据由 `DrillPlatformData.availableShapeIds` 维护）。
+  - **鼠标左键拖动**：
+    - 在库存面板中，玩家可以在单个库存项（`ShapeItem_shape` / `ShapeInventoryItem`）上按下鼠标左键并轻微拖动，进入“拖拽放置模式”：
+      - 拖拽过程中鼠标可以离开库存区域，移动到 `PlatformGrid` 上方时，平台视图会根据当前鼠标所在格子位置实时计算预览形状；
+      - 在平台有效格子上松开左键时，调用 `DrillPlatformManager.TryPlaceShape(shapeId, position, rotation)` 尝试放置当前造型：
+        - 放置成功：从 `DrillPlatformData.availableShapeIds` 中移除一个该 `shapeId`，并刷新库存与平台显示；
+        - 放置失败（越界或与现有造型重叠等）：不修改库存，仅通过状态文本提示失败原因；
+      - 拖拽过程中，如果鼠标不在任一平台格子上（或离开平台区域），则不显示预览，仅保持库存选中状态；
+    - 在平台上按下左键并拖动已有造型，可通过拖拽移动该造型的位置，同样遵守不重叠/不越界规则。
+  - **鼠标右键旋转**：
+    - 在平台上对某一格右键点击，若该格属于某个已放置造型，则选中该造型并立即顺时针旋转 90°；
+    - 旋转操作同样需要通过平台边界与与其他造型的碰撞校验，失败时给出 UI 状态提示；
+    - 在**从库存拖拽新造型到平台格子上**的拖拽过程中：
+      - 拖拽状态保持时，**每次点击鼠标右键**都会使当前拖拽中的预览造型顺时针旋转 90°（合法角度为 0°/90°/180°/270°）；
+      - 每次旋转后立即以新的旋转角度重新计算放置预览与合法性（边界 + 重叠），并刷新预览颜色：
+        - 合法位置：使用配置中的 `hoverColor`（灰白/高亮）显示；
+        - 非法位置：使用配置中的 `invalidColor`（红色）显示；
+      - 最终在鼠标左键松开时，以玩家最后一次右键旋转后的角度调用 `TryPlaceShape(shapeId, position, rotation)` 完成落盘。
+  - **确认 / 取消 / 保存 按钮**：
+    - **确认**：接受当前平台布局，关闭编辑界面，本回合及后续挖矿都使用当前布局；不修改本次进入编辑前的备份数据；
+    - **取消**：丢弃本次编辑会话内的所有调整，将 `DrillPlatformData` 恢复为进入编辑前的备份状态，然后关闭编辑界面；
+    - **保存**：将当前平台布局写回当前钻头的 `DrillData.platformData`（用于后续回合与存档），但不关闭编辑界面，允许玩家继续微调；保存不会重置进入编辑前的备份数据，后续点击“取消”仍然表示回到进入本次编辑前的状态。
+
+##### 7.2.1.0 钻头库存列表 UI（`DrillShapeInventory`）
+
+- **组件职责**：
+  - 作为钻机编辑界面的子组件，负责在 `InventoryPanel → Content` 容器中展示当前关卡可用的所有钻头造型库存；
+  - 根据 `DrillPlatformManager.GetAvailableShapeIds()` 返回的可用造型 ID 列表，结合 `ConfigManager.GetDrillShapeConfig(shapeId)` 获取到的配置，生成一组可点击的列表项；
+  - 当玩家点击某个库存造型项时，通过调用 `DrillEditorScreen.SelectInventoryShape(shapeId)` 告知编辑界面“当前准备放置的造型”，由平台视图在玩家点击平台格子时尝试放置。
+- **关键引用字段**：
+  - `contentContainer : RectTransform`
+    - 指向 `InventoryPanel` 下用于承载所有库存列表项的 `Content` 容器；
+    - 运行时会根据可用造型数量计算 `Content` 的高度，并将每个造型项的 `RectTransform` 作为子节点挂在其下；
+  - `shapeItemPrefab : GameObject`
+    - 用于实例化单个库存项视图的模板 GameObject；
+    - 优先支持 **场景静态模板模式**：推荐在 `Content` 下预先放置一个完整的 `ShapeItem_shape` 子物体（包含背景 `Image`、`Button`、文本与预览子节点），在 `Awake/Start` 时由 `DrillShapeInventory` 自动识别并缓存为 `_templateItem`，同时将其赋值给 `shapeItemPrefab` 并隐藏（`SetActive(false)`），后续所有列表项都通过 `Instantiate(shapeItemPrefab, contentContainer)` 克隆生成；
+    - 若未在场景中放置静态模板，仍可在 Inspector 中直接将某个预制体拖入 `shapeItemPrefab` 字段，逻辑保持兼容；
+  - `_templateItem : GameObject`（私有运行时字段）
+    - 缓存 `Content` 下找到的静态模板子物体（通常命名为 `ShapeItem_shape`，或第一个带有 `ShapeInventoryItem` 组件的子物体）；
+    - 仅用作克隆源，**不会被加入运行时列表项集合，也不会在刷新时销毁**。
+  - `_itemObjects : List<GameObject>`
+    - 存储当前帧中通过模板克隆出来的所有库存项实例；
+    - 仅包含运行时实例，不包含 `_templateItem` 本身，用于刷新、清理和更新选中高亮状态。
+- **生命周期与初始化流程**：
+  - `Awake()`：
+    - 获取 `DrillPlatformManager.Instance` 与 `ConfigManager.Instance` 单例；
+    - 如果 `shapeItemPrefab` 为空，则在 `contentContainer` 的子物体中：
+      - 优先查找名称为 `ShapeItem_shape` 的子物体；
+      - 若未找到则退而求其次，查找第一个挂有 `ShapeInventoryItem` 组件的子物体；
+      - 将找到的子物体缓存到 `_templateItem`，同时赋值给 `shapeItemPrefab` 并执行 `_templateItem.SetActive(false)` 隐藏模板；
+    - 如果 `shapeItemPrefab` 非空且本身就是 `contentContainer` 的子物体，同样将其视为 `_templateItem` 并在运行时隐藏；
+  - `Start()`：
+    - 调用 `Refresh()`，根据当前可用造型构建库存列表；
+  - `Refresh()`：
+    - 调用 `_platformManager.GetAvailableShapeIds()` 获取可用造型 ID 列表；
+    - 使用 `_itemObjects` 记录的实例逐个 `Destroy` 并清空列表，**不影响 `_templateItem` 本身**；
+    - 根据造型数量和 `itemHeight + itemSpacing` 重新计算并设置 `contentContainer` 高度；
+    - 遍历每个 `shapeId`，通过 `ConfigManager.GetDrillShapeConfig` 获取配置，调用 `CreateShapeItem(config, yOffset)` 使用 `shapeItemPrefab` 克隆出对应的库存项，并加入 `_itemObjects`；
+    - 最后调用 `UpdateSelection()` 根据 `_selectedShapeId` 更新背景色高亮状态；
+  - `CreateShapeItem(config, yOffset)`：
+    - 使用 `Instantiate(shapeItemPrefab, contentContainer)` 克隆出一个新的库存项；
+    - 设置其 `RectTransform` 布局参数（锚点、尺寸、高度偏移等）；
+    - 如果克隆出的对象上挂有 `ShapeInventoryItem` 组件，则调用 `Setup(config, this)` 将配置数据绑定到 UI 文本；
+    - 在其 `Button` 上挂接点击事件，使其调用 `OnShapeItemClicked(config.shapeId)`，进而通过 `DrillEditorScreen.SelectInventoryShape` 通知编辑界面；
+    - 通过 `FontHelper.ApplyFontToGameObject` 应用动态字体，保证中文显示完整；
+  - `OnShapeItemClicked(shapeId)` / `UpdateSelection()`：
+    - 维护 `_selectedShapeId` 当前选中的库存造型 ID；
+    - 遍历 `_itemObjects`，根据 `shapeId == _selectedShapeId` 切换背景色（`normalColor / selectedColor`），实现列表中的选中高亮。
+
+##### 7.2.1.1 钻机平台UI组件（`DrillPlatformView`）
+
+- **组件职责**：
+  - 在钻机编辑界面中，以 9x9 网格方式可视化当前 `DrillPlatformData`；
+  - 显示已放置造型的占用格子、高亮当前选中造型，并在鼠标悬停时给出放置预览（合法=灰白预览、非法=红色预览）；
+  - 作为 `DrillEditorScreen` 的子组件，响应其库存选择、已放置造型选择、移动与旋转指令。
+- **关键引用字段**：
+  - `gridContainer : RectTransform`  
+    - 必须在 Unity Inspector 中手动绑定到钻机编辑界面下用于承载 9x9 单元格的容器节点（推荐命名：`PlatformGrid`，位于 `DrillEditorPanel` / `DrillEditorScreen` Canvas 层次结构下）；  
+    - 运行时 **禁止为空**：若为空将无法完成格子初始化，`InitGridFromChildren()` 会记录错误日志；  
+    - 防御性默认行为：若未在 Inspector 绑定且当前 `GameObject` 本身挂有 `RectTransform`，则在初始化时自动将自身的 `RectTransform` 作为 `gridContainer` 使用，并记录一条调试日志，**仍然强烈建议在预制体/场景上显式绑定正确的容器节点**，避免后续布局结构调整导致平台网格位置异常。
+  - `_cellObjects : Dictionary<Vector2Int, GameObject>`  
+    - 键为平台坐标（`(x, y)`，范围 `[0, DrillPlatformData.PLATFORM_SIZE)`，左下角为 `(0,0)`，右上角为 `(8,8)`），值为场景中对应的格子 GameObject；  
+    - 由初始化流程根据 `gridContainer` 下的子节点与其挂载的 `DrillPlatformCell` 数据自动构建。
+- **平台格子静态化与布局规范**：
+  - **静态格子设计**：
+    - `DrillEditorPanel/PlatformGrid` 下预先放置 81 个格子子节点，每个子节点代表 9x9 平台中的一个格子；
+    - 每个格子节点都挂载轻量标记组件 `DrillPlatformCell`，内部至少包含其平台坐标信息（`x`, `y` 或 `gridPosition : Vector2Int`），坐标范围为 0~8；
+    - 允许使用 `GridLayoutGroup` 或手动调整 `RectTransform.anchoredPosition` / `sizeDelta` 以满足美术布局，只要 81 个格子坐标准确覆盖 9x9 全平台即可。
+  - **`DrillPlatformCell` 数据结构（UI 标记组件）**：
+    - 伪代码示例：  
+      ```csharp
+      public class DrillPlatformCell : MonoBehaviour
+      {
+          [Range(0, DrillPlatformData.PLATFORM_SIZE - 1)]
+          public int x;
+          [Range(0, DrillPlatformData.PLATFORM_SIZE - 1)]
+          public int y;
+
+          public Vector2Int GridPosition => new Vector2Int(x, y);
+
+          // 可选缓存：用于减少运行时 GetComponent 调用
+          [HideInInspector] public Image image;
+          [HideInInspector] public Button button;
+          [HideInInspector] public EventTrigger eventTrigger;
+      }
+      ```
+    - `DrillPlatformCell` 仅承担“标记 + 坐标”职责，不持有钻头逻辑数据，不参与存档。
+  - **初始化流程（`InitGridFromChildren()`）**：
+    - `Awake()`：获取 `DrillPlatformManager.Instance` 与 `ConfigManager.Instance` 单例；  
+    - `Start()`：调用 `InitGridFromChildren()`，从 `gridContainer` 下的子节点收集所有 `DrillPlatformCell` 并构建 `_cellObjects`，然后调用 `Refresh()` 同步显示；
+    - `InitGridFromChildren()` 约定行为：
+      - 校验 `gridContainer != null`，否则：
+        - 通过 Unity 日志输出错误 `"DrillPlatformView: gridContainer未设置"`；
+        - 直接 `return`，不再尝试初始化格子；
+      - 调用 `GetComponentsInChildren<DrillPlatformCell>(true)` 遍历所有格子标记组件：
+        - 对每个 `DrillPlatformCell` 读取其 `GridPosition`（或 `x`,`y`），检查坐标在 `[0, DrillPlatformData.PLATFORM_SIZE)` 范围内；
+        - 若存在重复坐标或越界坐标，记录清晰的错误日志（包含重复的 `(x,y)` 值与节点名称），并跳过这些节点；
+        - 对每个有效格子，确保其上存在 `Image`、`Button`、`EventTrigger` 组件：若缺失则在运行时通过 `AddComponent` 自动补齐；
+        - 为 `Button` 绑定 `OnCellClicked(position)` 回调，为 `EventTrigger` 绑定 `PointerEnter/Exit` 事件，分别调用 `OnCellHoverEnter(position)` 与 `OnCellHoverExit()`；
+        - 将 `position` 与对应的 `GameObject` 写入 `_cellObjects[position]`。
+  - **事件与交互绑定**：
+    - 每个格子：
+      - 挂载 `Button`：左键点击时调用 `OnCellClicked(position)`，最终委托到 `DrillEditorScreen.TryPlaceAtPosition(position)`；
+      - 挂载 `EventTrigger`：`PointerEnter/Exit` 事件更新 `_hoveredCell` 并调用 `UpdateHoverPreview()` / `ClearHoverPreview()`；
+    - `DrillPlatformView` 继续直接实现 `IPointerDownHandler / IDragHandler / IPointerUpHandler / IPointerClickHandler`：
+      - 左键按下：根据是否有待放置造型（库存）与当前格子是否存在已放置造型，分别进入“拖拽新造型”或“拖动已放置造型”模式；
+      - 拖拽中：实时更新拖拽目标格子、高亮预览或调用 `DrillEditorScreen.TryMoveSelectedShape` 尝试移动；
+      - 左键松开：若当前为“拖拽新造型”模式，则在当前位置调用一次 `TryPlaceAtPosition` 完成放置；
+      - 右键点击：命中已有造型时，调用 `DrillEditorScreen.SelectPlacedShape + RotateSelectedShape(true)` 实现就地顺时针旋转。
+  - **错误与调试约定**：
+    - 若运行时报出 `"DrillPlatformView: gridContainer未设置"`：
+      - 首先检查 `DrillPlatformView` 挂载的 GameObject 是否处于激活状态，以及其 Canvas/父节点是否在当前场景中可见；
+      - 确认 `gridContainer` 字段已在 Inspector 中正确拖拽绑定到 `PlatformGrid` 的 RectTransform；  
+    - 若运行时报出“重复坐标”或“格子坐标越界”等日志：
+      - 在 Unity 层次视图中检查 `PlatformGrid` 下格子节点的 `DrillPlatformCell.x / y` 配置是否有冲突或缺失；
+      - 调整后重新运行，确保 81 个格子覆盖 `(0,0)` 到 `(8,8)` 的所有坐标。
+
 #### 7.2.4 游戏流程设计
 
 ```
@@ -2675,10 +2856,15 @@ UI系统
      - 高亮更新：地图更新时自动刷新高亮状态，钻头范围变化时也会自动更新
      - 高亮配置：可通过MiningMapView组件的Inspector配置高亮颜色、变暗透明度、是否启用高亮
   - **挖矿地图颜色规则（硬度区间配置表）**：
-    - 仅矿石格子使用配置表颜色映射；空/岩石/已挖格子保持原固定颜色
+    - 仅矿石格子使用配置表颜色映射；空/岩石格子保持原固定颜色
+    - 已挖掘格子使用图片显示：`Resources/UI/Lattice/Lattice_null.png`
     - 配置文件：`Resources/Configs/TileHardnessColorConfigs.json`
     - 匹配规则：按 `maxHardness` 升序匹配，选择第一个 `hardness <= maxHardness` 的颜色
     - 边界处理：硬度大于最大阈值时使用最后一个颜色；配置缺失或为空则回退为最低硬度颜色
+  - **已挖掘格子显示规则**：
+    - 已挖掘的格子优先使用图片 `Lattice_null` 显示
+    - 图片路径：`Resources/UI/Lattice/Lattice_null`
+    - 如果图片加载失败，回退使用深灰色显示（RGB(0.2, 0.2, 0.2)）
   - **硬度颜色配置表数据结构**：
     - `TileHardnessColorConfigCollection`：包含 `thresholds` 列表
     - `TileHardnessColorThreshold`：
@@ -2704,15 +2890,21 @@ UI系统
    - 钻头有挖掘强度（攻击值，初始由默认钻头决定）
    - 钻头有挖掘范围（长宽格子数，初始由默认钻头决定）
    - 钻头可以拥有额外属性（用于挖掘特殊矿石）
-   - 钻头可以通过类Rogue三选一升级（提升攻击值、范围、额外属性等）
+   - 钻头可以通过类Rogue三选一升级：
+     - 数值类：提升攻击值、挖掘效率、矿石价值、勘探能力等；
+     - 造型类：通过 `DrillShapeUnlock` 解锁新的钻头造型（`DrillShapeConfig`），并加入当前关卡的钻机平台库存（`DrillPlatformData.availableShapeIds`），玩家可在平台上放置该造型。
    - 钻头可以通过发现失落的装备升级
    - 升级效果仅本关内生效
 
 6. **能源升级规则**
    - 能源值达到配置表中定义的阈值时触发三选一升级
-   - 三选一选项包括挖掘船升级和勘探矿石升级
+   - 三选一选项包括：
+     - 挖掘船属性升级（挖掘强度、挖掘效率、矿石价值、勘探能力等）
+     - 勘探矿石能力升级（发现更多矿石、提高矿石价值等）
+     - 解锁新的钻头造型（`DrillShapeUnlock`）：将配置表中指定的 `shapeId` 加入当前关卡的钻机平台库存，供玩家在钻机平台编辑界面中拖拽放置
    - 升级效果仅本关内生效（任务完成后重置）
    - 能源值可以多次达到阈值，触发多次升级
+   - 每次触发升级后，当前能源值会扣除本次升级所需的阈值数值（例如：当前能源为102点，阈值为100点，则触发升级后能源变为2点）
 
 7. **信用积分规则**
    - 胜利结算时获得信用积分（根据还债进度、任务完成情况等计算）
@@ -2782,7 +2974,11 @@ UI系统
 
 #### 7.3.1 Excel配置表设计
 
-**配置表文件结构**：
+**配置表文件结构与编码规范**：
+
+- 所有 Excel / CSV 配置文件统一使用 **UTF-8 编码**（推荐带 BOM），以确保 Unity 与文本编辑器中中文字段不会出现乱码
+- 配置文件保存/导出时需要显式选择 UTF-8 编码格式，避免默认 ANSI 或 GBK 导致的"�"字符
+- 若发现已有配置表出现乱码（例如 `DrillShapeConfigs_钻头造型配置表_示例.csv`），需要先根据设计含义恢复中文，再重新以 UTF-8 编码保存
 
 1. **任务配置表（TaskConfig.xlsx）**
    - 列：任务ID、任务名称、任务类型、最大回合数、目标债务金额、下一个任务ID、描述
@@ -2812,6 +3008,15 @@ UI系统
 6. **能源阈值配置表（EnergyThresholdConfig.xlsx）**
    - 列：阈值索引、能源值、描述
    - 用途：定义触发三选一升级的能源阈值序列
+
+7. **钻头造型配置表示例（DrillShapeConfigs_钻头造型配置表_示例.csv）**
+   - 列：`shapeId`、`shapeName`、`baseAttackStrength`、`cells`、`traits`、`description`
+   - 用途：以 CSV 示例形式给出若干典型钻头造型（十字形、直线、L 形、T 形、方块形、Z/S 形、能源提取专用等），并作为能源升级系统中 `DrillShapeUnlock` 选项的来源表：
+     - 对于每一条 `shapeId`，可以在 `EnergyUpgradeConfigs` 中增加一条对应的“解锁钻头造型”升级配置行（`type = DrillShapeUnlock`，`upgradeId` 与 `shapeId` 对应），用于在三选一中解锁该造型。
+   - 说明：
+     - `cells`：使用 `x,y;x,y;...` 形式定义相对锚点(0,0)的格子坐标
+     - `traits`：为 JSON 字符串，内部字段与 `ShapeTraitConfig` 对应（`traitId/traitName/triggerCondition/effectType/effectValue/description`）
+     - 本示例 CSV 建议始终使用 UTF-8 编码保存，以避免中文字段显示乱码
 
 #### 7.3.2 Excel转Unity数据流程
 
@@ -3131,6 +3336,7 @@ string text = LocalizationManager.Instance.GetLocalizedString("ui.menu.start");
 | - | 1.9 | 添加挖矿地图高亮规则：在攻击范围内的格子高亮显示，范围外的格子变暗显示；添加UI自适应规则、Canvas保持激活规则、字体显示规则 | - |
 | - | 1.10 | 添加动态中文字体加载系统：实现按需生成字符的动态字体模式，支持内存优化配置，集成到GameInitializer初始化流程，添加字体管理模块和完整API接口 | - |
 | - | 1.11 | 添加矿石视觉系统和挖矿动效系统扩展：矿石图片素材配置、晃动特效、红色高亮反馈、金钱飞行动画 | - |
+| - | 1.12 | 添加能源三选一与钻机编辑界面联动规则：当选择DrillShapeUnlock类型升级时，在升级完成并关闭三选一界面后自动尝试打开钻机编辑界面 | - |
 
 ---
 

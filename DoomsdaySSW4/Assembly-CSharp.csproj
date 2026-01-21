@@ -117,6 +117,7 @@
     <Compile Include="Assets\Scripts\Data\Models\DebtData.cs" />
     <Compile Include="Assets\Scripts\UI\Components\ResourceDisplay.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexJitter.cs" />
+    <Compile Include="Assets\Scripts\UI\Effects\MiningEffectsManager.cs" />
     <Compile Include="Assets\Scripts\UI\Components\FontDiagnostics.cs" />
     <Compile Include="Assets\Scripts\Core\GameInitializer.cs" />
     <Compile Include="Assets\Scripts\Data\Models\EnergyUpgradeConfig.cs" />
@@ -136,7 +137,8 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexZoom.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark01.cs" />
     <Compile Include="Assets\Scripts\Turn\TurnManager.cs" />
-    <Compile Include="Assets\Scripts\UI\Effects\MiningEffectsManager.cs" />
+    <Compile Include="Assets\Scripts\UI\Components\DrillPlatformCell.cs" />
+    <Compile Include="Assets\Scripts\UI\Components\ShapeInventoryItem.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />

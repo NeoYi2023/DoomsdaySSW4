@@ -55,8 +55,12 @@ public class MiningMapView : MonoBehaviour
     
     private readonly Color _defaultOreColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
     
+    // 已挖掘格子图片路径
+    private const string MINED_TILE_SPRITE_PATH = "UI/Lattice/Lattice_null";
+    
     // 矿石图片缓存
     private Dictionary<string, Sprite> _oreSpriteCache = new Dictionary<string, Sprite>();
+    private Sprite _minedTileSprite; // 已挖掘格子图片缓存
     private Dictionary<Vector2Int, string> _tileOreIds = new Dictionary<Vector2Int, string>(); // 存储每个格子的矿石ID
     
     // 未完全挖掉的格子记录（用于红色高亮）
@@ -293,16 +297,33 @@ public class MiningMapView : MonoBehaviour
             // 添加Image组件
             Image image = tileObj.AddComponent<Image>();
             
-            // 尝试加载矿石图片
-            Sprite oreSprite = GetOreSpriteForTile(tileData);
-            if (oreSprite != null)
+            // 优先处理已挖掘的格子：使用图片
+            if (tileData.isMined)
             {
-                image.sprite = oreSprite;
-                image.color = Color.white; // 使用白色让图片显示原色
+                Sprite minedSprite = GetMinedTileSprite();
+                if (minedSprite != null)
+                {
+                    image.sprite = minedSprite;
+                    image.color = Color.white; // 使用白色让图片显示原色
+                }
+                else
+                {
+                    image.color = GetTileColor(tileData);
+                }
             }
+            // 尝试加载矿石图片
             else
             {
-                image.color = GetTileColor(tileData);
+                Sprite oreSprite = GetOreSpriteForTile(tileData);
+                if (oreSprite != null)
+                {
+                    image.sprite = oreSprite;
+                    image.color = Color.white; // 使用白色让图片显示原色
+                }
+                else
+                {
+                    image.color = GetTileColor(tileData);
+                }
             }
 
             // 添加Text显示硬度
@@ -353,22 +374,45 @@ public class MiningMapView : MonoBehaviour
         Image image = tileObj.GetComponent<Image>();
         if (image != null)
         {
-            // 尝试使用矿石图片
-            Sprite oreSprite = GetOreSpriteForTile(tileData);
-            if (oreSprite != null)
+            // 优先处理已挖掘的格子：使用图片
+            if (tileData.isMined)
             {
-                image.sprite = oreSprite;
-                image.color = Color.white;
-                // 存储白色作为基础颜色（用于高亮计算）
-                _baseColors[new Vector2Int(tileData.x, tileData.y)] = Color.white;
+                Sprite minedSprite = GetMinedTileSprite();
+                if (minedSprite != null)
+                {
+                    image.sprite = minedSprite;
+                    image.color = Color.white;
+                    // 存储白色作为基础颜色（用于高亮计算）
+                    _baseColors[new Vector2Int(tileData.x, tileData.y)] = Color.white;
+                }
+                else
+                {
+                    // 图片加载失败，回退到颜色显示
+                    image.sprite = null;
+                    Color baseColor = GetTileColor(tileData);
+                    image.color = baseColor;
+                    _baseColors[new Vector2Int(tileData.x, tileData.y)] = baseColor;
+                }
             }
+            // 尝试使用矿石图片
             else
             {
-                // 回退到颜色显示
-                image.sprite = null;
-                Color baseColor = GetTileColor(tileData);
-                image.color = baseColor;
-                _baseColors[new Vector2Int(tileData.x, tileData.y)] = baseColor;
+                Sprite oreSprite = GetOreSpriteForTile(tileData);
+                if (oreSprite != null)
+                {
+                    image.sprite = oreSprite;
+                    image.color = Color.white;
+                    // 存储白色作为基础颜色（用于高亮计算）
+                    _baseColors[new Vector2Int(tileData.x, tileData.y)] = Color.white;
+                }
+                else
+                {
+                    // 回退到颜色显示
+                    image.sprite = null;
+                    Color baseColor = GetTileColor(tileData);
+                    image.color = baseColor;
+                    _baseColors[new Vector2Int(tileData.x, tileData.y)] = baseColor;
+                }
             }
         }
 
@@ -430,6 +474,22 @@ public class MiningMapView : MonoBehaviour
         _tileMap.Clear();
         _baseColors.Clear();
         _tileOreIds.Clear();
+    }
+    
+    /// <summary>
+    /// 获取已挖掘格子的Sprite
+    /// </summary>
+    private Sprite GetMinedTileSprite()
+    {
+        // 如果已缓存，直接返回
+        if (_minedTileSprite != null)
+        {
+            return _minedTileSprite;
+        }
+        
+        // 从Resources加载
+        _minedTileSprite = Resources.Load<Sprite>(MINED_TILE_SPRITE_PATH);
+        return _minedTileSprite;
     }
     
     /// <summary>

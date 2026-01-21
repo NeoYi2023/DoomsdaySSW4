@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -385,6 +386,15 @@ public class DrillPlatformManager : MonoBehaviour
     {
         if (_platformData == null)
         {
+            // #region agent log
+            try
+            {
+                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H1\",\"location\":\"DrillPlatformManager.AddShapeToInventory\",\"message\":\"Platform not initialized when adding shape\",\"data\":{\"shapeId\":\"" + (shapeId ?? "") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+            }
+            catch { }
+            // #endregion
+
             Debug.LogError("平台未初始化，无法添加造型");
             return;
         }
@@ -394,6 +404,15 @@ public class DrillPlatformManager : MonoBehaviour
             _platformData.availableShapeIds.Add(shapeId);
             Debug.Log($"新造型 {shapeId} 已添加到库存");
             OnPlatformChanged?.Invoke();
+
+            // #region agent log
+            try
+            {
+                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H2\",\"location\":\"DrillPlatformManager.AddShapeToInventory\",\"message\":\"Shape added to inventory\",\"data\":{\"shapeId\":\"" + (shapeId ?? "") + "\",\"availableCount\":" + _platformData.availableShapeIds.Count + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+            }
+            catch { }
+            // #endregion
         }
     }
 

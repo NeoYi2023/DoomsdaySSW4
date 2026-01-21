@@ -19,24 +19,6 @@
             "iconPath": ""
         },
         {
-            "upgradeId": "drill_range_1",
-            "type": "DrillRange",
-            "name": "挖掘范围提升 I",
-            "description": "钻头范围 +1x1",
-            "value": 1,
-            "weight": 30,
-            "iconPath": ""
-        },
-        {
-            "upgradeId": "drill_range_2",
-            "type": "DrillRange",
-            "name": "挖掘范围提升 II",
-            "description": "钻头范围 +2x2",
-            "value": 2,
-            "weight": 15,
-            "iconPath": ""
-        },
-        {
             "upgradeId": "mining_efficiency_1",
             "type": "MiningEfficiency",
             "name": "挖掘效率提升 I",
@@ -88,6 +70,96 @@
             "description": "每回合额外发现 4 个矿石",
             "value": 4,
             "weight": 10,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_single",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：单格钻头",
+            "description": "解锁单格钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 20,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_cross_small",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：十字钻头",
+            "description": "解锁十字钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 20,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_line_3",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：直线钻头（3格）",
+            "description": "解锁3格直线钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 18,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_L",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：L形钻头",
+            "description": "解锁L形钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 18,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_T",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：T形钻头",
+            "description": "解锁T形钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 18,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_square_2x2",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：方块钻头",
+            "description": "解锁2x2方块钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 16,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_Z",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：Z形钻头",
+            "description": "解锁Z形钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 16,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_S",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：S形钻头",
+            "description": "解锁S形钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 16,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_line_4",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：长线钻头（4格）",
+            "description": "解锁4格直线钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 14,
+            "iconPath": ""
+        },
+        {
+            "upgradeId": "shape_energy_extractor",
+            "type": "DrillShapeUnlock",
+            "name": "解锁造型：能源提取钻",
+            "description": "解锁能源提取专用钻头造型，可在钻机平台中放置",
+            "value": 0,
+            "weight": 12,
             "iconPath": ""
         }
     ]

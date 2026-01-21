@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using System.IO;
 
 /// <summary>
 /// 钻头造型库存视图：显示可用的造型列表
@@ -28,6 +29,11 @@ public class DrillShapeInventory : MonoBehaviour
     private DrillPlatformManager _platformManager;
     private ConfigManager _configManager;
     
+    /// <summary>
+    /// Content 下的静态模板项（如 ShapeItem_shape），仅作为克隆源，不参与运行时销毁
+    /// </summary>
+    private GameObject _templateItem;
+    
     private List<GameObject> _itemObjects = new List<GameObject>();
     private string _selectedShapeId;
 
@@ -35,11 +41,69 @@ public class DrillShapeInventory : MonoBehaviour
     {
         _platformManager = DrillPlatformManager.Instance;
         _configManager = ConfigManager.Instance;
+
+        InitializeTemplateItem();
     }
 
     private void Start()
     {
         Refresh();
+    }
+
+    /// <summary>
+    /// 初始化 Content 下的静态模板项（如果存在）
+    /// </summary>
+    private void InitializeTemplateItem()
+    {
+        if (contentContainer == null)
+        {
+            return;
+        }
+
+        // 如果已经有预制体引用，且它本身就是 Content 的子节点，则视为模板
+        if (shapeItemPrefab != null)
+        {
+            RectTransform prefabRect = shapeItemPrefab.GetComponent<RectTransform>();
+            if (prefabRect != null && prefabRect.parent == contentContainer)
+            {
+                _templateItem = shapeItemPrefab;
+            }
+        }
+
+        // 若尚未确定模板，则在 Content 子物体中查找
+        if (_templateItem == null)
+        {
+            // 优先按名称查找 ShapeItem_shape
+            for (int i = 0; i < contentContainer.childCount; i++)
+            {
+                Transform child = contentContainer.GetChild(i);
+                if (child != null && child.name == "ShapeItem_shape")
+                {
+                    _templateItem = child.gameObject;
+                    break;
+                }
+            }
+
+            // 如果按名称未找到，则找第一个挂有 ShapeInventoryItem 的子物体
+            if (_templateItem == null)
+            {
+                ShapeInventoryItem[] items = contentContainer.GetComponentsInChildren<ShapeInventoryItem>(true);
+                if (items != null && items.Length > 0)
+                {
+                    _templateItem = items[0].gameObject;
+                }
+            }
+        }
+
+        // 如果最终找到了模板，则用它作为 shapeItemPrefab 并隐藏
+        if (_templateItem != null)
+        {
+            shapeItemPrefab = _templateItem;
+            if (_templateItem.activeSelf)
+            {
+                _templateItem.SetActive(false);
+            }
+        }
     }
 
     /// <summary>
@@ -57,7 +121,7 @@ public class DrillShapeInventory : MonoBehaviour
             _configManager = ConfigManager.Instance;
         }
 
-        // 清除现有项
+        // 清除现有项（仅销毁运行时实例，不影响 Content 下的静态模板）
         foreach (var item in _itemObjects)
         {
             if (item != null) Destroy(item);
@@ -72,6 +136,16 @@ public class DrillShapeInventory : MonoBehaviour
 
         // 获取可用造型
         List<string> availableShapeIds = _platformManager.GetAvailableShapeIds();
+
+        // #region agent log
+        try
+        {
+            string joined = string.Join(",", availableShapeIds);
+            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H2\",\"location\":\"DrillShapeInventory.Refresh\",\"message\":\"Inventory refresh\",\"data\":{\"count\":" + availableShapeIds.Count + ",\"shapeIds\":\"" + joined + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+        }
+        catch { }
+        // #endregion
         
         // 计算内容高度
         float totalHeight = availableShapeIds.Count * (itemHeight + itemSpacing) - itemSpacing;
@@ -82,7 +156,18 @@ public class DrillShapeInventory : MonoBehaviour
         foreach (string shapeId in availableShapeIds)
         {
             DrillShapeConfig config = _configManager.GetDrillShapeConfig(shapeId);
-            if (config == null) continue;
+            if (config == null)
+            {
+                // #region agent log
+                try
+                {
+                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H3\",\"location\":\"DrillShapeInventory.Refresh\",\"message\":\"Shape config missing\",\"data\":{\"shapeId\":\"" + (shapeId ?? "") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                    File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+                }
+                catch { }
+                // #endregion
+                continue;
+            }
 
             GameObject itemObj = CreateShapeItem(config, yOffset);
             _itemObjects.Add(itemObj);
@@ -101,6 +186,7 @@ public class DrillShapeInventory : MonoBehaviour
         if (shapeItemPrefab != null)
         {
             itemObj = Instantiate(shapeItemPrefab, contentContainer);
+            itemObj.SetActive(true);
         }
         else
         {
@@ -320,49 +406,16 @@ public class DrillShapeInventory : MonoBehaviour
     {
         return _selectedShapeId;
     }
+
+    /// <summary>
+    /// 获取关联的编辑界面实例（供库存项访问）
+    /// </summary>
+    public DrillEditorScreen GetEditorScreen()
+    {
+        return editorScreen;
+    }
 }
 
 /// <summary>
 /// 造型库存项组件（可选，用于预制体）
 /// </summary>
-public class ShapeInventoryItem : MonoBehaviour
-{
-    [SerializeField] private TextMeshProUGUI nameText;
-    [SerializeField] private TextMeshProUGUI attackText;
-    [SerializeField] private TextMeshProUGUI cellCountText;
-    [SerializeField] private TextMeshProUGUI descriptionText;
-    
-    private DrillShapeConfig _config;
-    private DrillShapeInventory _inventory;
-
-    public void Setup(DrillShapeConfig config, DrillShapeInventory inventory)
-    {
-        _config = config;
-        _inventory = inventory;
-
-        if (nameText != null)
-        {
-            nameText.text = config.shapeName;
-        }
-
-        if (attackText != null)
-        {
-            attackText.text = $"攻击: {config.baseAttackStrength}";
-        }
-
-        if (cellCountText != null)
-        {
-            cellCountText.text = $"格子: {config.CellCount}";
-        }
-
-        if (descriptionText != null)
-        {
-            descriptionText.text = config.description;
-        }
-    }
-
-    public DrillShapeConfig GetConfig()
-    {
-        return _config;
-    }
-}

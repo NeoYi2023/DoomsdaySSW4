@@ -575,6 +575,15 @@ public class GameScreen : MonoBehaviour
     /// </summary>
     private void OnEditDrillButtonClicked()
     {
+        // #region agent log
+        try
+        {
+            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"ui-debug-1\",\"hypothesisId\":\"HE1\",\"location\":\"GameScreen.OnEditDrillButtonClicked\",\"message\":\"EditDrill button clicked\",\"data\":{\"turnManagerNull\":" + (_turnManager == null ? "true" : "false") + ",\"drillEditorNull\":" + (_drillEditorScreen == null ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", log + System.Environment.NewLine);
+        }
+        catch { }
+        // #endregion
+
         // 检查是否允许编辑（非自动挖矿模式）
         if (_turnManager != null && _turnManager.IsAutoMiningEnabled())
         {

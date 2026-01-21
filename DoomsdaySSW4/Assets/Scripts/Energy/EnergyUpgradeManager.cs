@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -170,6 +171,15 @@ public class EnergyUpgradeManager : MonoBehaviour
         if (_energyData.currentEnergy >= nextThreshold)
         {
             Debug.Log($"达到能源阈值: {nextThreshold}，触发升级选择");
+
+            // 每次触发升级后，消耗本次升级所需的阈值能源
+            // 例如：当前能源为102点，阈值为100点，则升级后变为2点
+            _energyData.currentEnergy -= nextThreshold;
+            if (_energyData.currentEnergy < 0)
+            {
+                _energyData.currentEnergy = 0;
+            }
+
             TriggerUpgradeSelection();
             _energyData.nextThresholdIndex++;
         }
@@ -198,6 +208,35 @@ public class EnergyUpgradeManager : MonoBehaviour
         if (configs == null || configs.Count == 0)
         {
             Debug.LogWarning("没有可用的升级配置，使用默认选项");
+            return GenerateDefaultOptions(count);
+        }
+
+        // 过滤已解锁的造型解锁项：同一个 shapeId 只需解锁一次
+        if (_energyData != null && _energyData.upgrades != null)
+        {
+            HashSet<string> unlockedShapeIds = new HashSet<string>();
+            foreach (var upgrade in _energyData.upgrades)
+            {
+                if (upgrade.optionType == UpgradeOptionType.DrillShapeUnlock && !string.IsNullOrEmpty(upgrade.upgradeId))
+                {
+                    unlockedShapeIds.Add(upgrade.upgradeId);
+                }
+            }
+
+            configs = configs.Where(c =>
+            {
+                if (string.Equals(c.type, UpgradeOptionType.DrillShapeUnlock.ToString(), System.StringComparison.OrdinalIgnoreCase))
+                {
+                    // 对于造型解锁，约定 upgradeId 即 shapeId
+                    return !unlockedShapeIds.Contains(c.upgradeId);
+                }
+                return true;
+            }).ToList();
+        }
+
+        if (configs.Count == 0)
+        {
+            Debug.LogWarning("过滤已解锁造型后没有可用的升级配置，使用默认选项");
             return GenerateDefaultOptions(count);
         }
 
@@ -259,6 +298,7 @@ public class EnergyUpgradeManager : MonoBehaviour
         {
             return new EnergyUpgradeOption
             {
+                upgradeId = config.upgradeId,
                 type = type,
                 name = config.name,
                 description = config.description,
@@ -271,6 +311,7 @@ public class EnergyUpgradeManager : MonoBehaviour
             Debug.LogWarning($"未知的升级类型: {config.type}");
             return new EnergyUpgradeOption
             {
+                upgradeId = config.upgradeId,
                 type = UpgradeOptionType.DrillStrength,
                 name = config.name,
                 description = config.description,
@@ -297,10 +338,10 @@ public class EnergyUpgradeManager : MonoBehaviour
             },
             new EnergyUpgradeOption
             {
-                type = UpgradeOptionType.DrillRange,
-                name = "挖掘范围提升",
-                description = "钻头范围 +1x1",
-                value = 1,
+                    type = UpgradeOptionType.MiningEfficiency,
+                    name = "挖掘效率提升（小）",
+                    description = "每次挖掘额外获得 5% 金钱",
+                    value = 5,
                 iconPath = ""
             },
             new EnergyUpgradeOption
@@ -338,16 +379,25 @@ public class EnergyUpgradeManager : MonoBehaviour
             return;
         }
 
-        // 创建升级记录
+        // 创建升级记录（对于造型解锁，约定 upgradeId 即 shapeId）
         EnergyUpgrade upgrade = new EnergyUpgrade
         {
-            upgradeId = System.Guid.NewGuid().ToString(),
+            upgradeId = option.upgradeId ?? System.Guid.NewGuid().ToString(),
             optionType = option.type,
             value = option.value,
             timestamp = System.DateTime.Now.Ticks
         };
 
         _energyData.upgrades.Add(upgrade);
+
+        // #region agent log
+        try
+        {
+            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.SelectUpgrade\",\"message\":\"SelectUpgrade called\",\"data\":{\"optionType\":\"" + option.type + "\",\"upgradeId\":\"" + (option.upgradeId ?? "") + "\",\"currentEnergy\":" + _energyData.currentEnergy + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+        }
+        catch { }
+        // #endregion
 
         // 应用升级效果
         ApplyUpgradeEffect(option);
@@ -361,7 +411,17 @@ public class EnergyUpgradeManager : MonoBehaviour
     private void ApplyUpgradeEffect(EnergyUpgradeOption option)
     {
         DrillManager drillManager = DrillManager.Instance;
+        DrillPlatformManager platformManager = DrillPlatformManager.Instance;
         DrillData drill = drillManager.GetCurrentDrill();
+
+        // #region agent log
+        try
+        {
+            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-2\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.ApplyUpgradeEffect\",\"message\":\"ApplyUpgradeEffect enter\",\"data\":{\"optionType\":\"" + option.type + "\",\"upgradeId\":\"" + (option.upgradeId ?? "") + "\",\"platformManagerNull\":" + (platformManager == null ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+        }
+        catch { }
+        // #endregion
 
         switch (option.type)
         {
@@ -377,21 +437,6 @@ public class EnergyUpgradeManager : MonoBehaviour
                         isPermanent = false
                     };
                     drillManager.ApplyUpgrade(strengthUpgrade);
-                }
-                break;
-
-            case UpgradeOptionType.DrillRange:
-                if (drill != null)
-                {
-                    DrillUpgrade rangeUpgrade = new DrillUpgrade
-                    {
-                        upgradeId = System.Guid.NewGuid().ToString(),
-                        type = UpgradeType.RangeBoost,
-                        value = option.value,
-                        description = option.description,
-                        isPermanent = false
-                    };
-                    drillManager.ApplyUpgrade(rangeUpgrade);
                 }
                 break;
 
@@ -411,6 +456,47 @@ public class EnergyUpgradeManager : MonoBehaviour
                 // 矿石发现能力加成（累加）
                 _oreDiscoveryBonus += option.value;
                 Debug.Log($"矿石发现能力提升: +{option.value}, 当前总加成: {_oreDiscoveryBonus}");
+                break;
+
+            case UpgradeOptionType.DrillShapeUnlock:
+                // 通过升级解锁新的钻头造型：约定 upgradeId 即 shapeId
+                if (platformManager != null && !string.IsNullOrEmpty(option.upgradeId))
+                {
+                    // #region agent log
+                    try
+                    {
+                        var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-2\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.ApplyUpgradeEffect\",\"message\":\"DrillShapeUnlock condition passed\",\"data\":{\"shapeId\":\"" + option.upgradeId + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                        File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+                    }
+                    catch { }
+                    // #endregion
+
+                    platformManager.AddShapeToInventory(option.upgradeId);
+                    
+                    // #region agent log
+                    try
+                    {
+                        var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.ApplyUpgradeEffect\",\"message\":\"Apply DrillShapeUnlock\",\"data\":{\"shapeId\":\"" + option.upgradeId + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                        File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+                    }
+                    catch { }
+                    // #endregion
+
+                    Debug.Log($"解锁钻头造型: {option.upgradeId}，已加入当前关卡钻机平台库存");
+                }
+                else
+                {
+                    // #region agent log
+                    try
+                    {
+                        var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-2\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.ApplyUpgradeEffect\",\"message\":\"DrillShapeUnlock condition failed\",\"data\":{\"platformManagerNull\":" + (platformManager == null ? "true" : "false") + ",\"upgradeIdNullOrEmpty\":" + (string.IsNullOrEmpty(option.upgradeId) ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                        File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+                    }
+                    catch { }
+                    // #endregion
+
+                    Debug.LogWarning($"尝试解锁钻头造型失败，upgradeId 无效: {option.upgradeId}");
+                }
                 break;
 
             default:
@@ -486,6 +572,7 @@ public class EnergyUpgradeManager : MonoBehaviour
 [System.Serializable]
 public class EnergyUpgradeOption
 {
+    public string upgradeId;          // 升级ID（对于造型解锁，约定为 shapeId）
     public UpgradeOptionType type;
     public string name;
     public string description;

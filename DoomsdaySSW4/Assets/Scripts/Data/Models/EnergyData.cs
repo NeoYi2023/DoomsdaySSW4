@@ -44,9 +44,9 @@ public class EnergyUpgrade
 public enum UpgradeOptionType
 {
     DrillStrength,      // 挖掘强度提升
-    DrillRange,         // 挖掘范围提升
     MiningEfficiency,   // 挖掘效率提升
     OreDiscovery,       // 矿石发现能力提升
-    OreValueBoost       // 矿石价值提升
+    OreValueBoost,      // 矿石价值提升
+    DrillShapeUnlock    // 解锁钻头造型（将指定造型加入当前关卡可用库存）
 }
 

@@ -20,6 +20,7 @@ public class UpgradeSelectionScreen : MonoBehaviour
 
     private GameManager _gameManager;
     private List<EnergyUpgradeOption> _currentOptions;
+    private DrillEditorScreen _drillEditorScreen; // 钻机编辑界面（用于在解锁造型后自动打开）
 
     private void Awake()
     {
@@ -141,7 +142,17 @@ public class UpgradeSelectionScreen : MonoBehaviour
                 optionButtons[i].onClick.AddListener(() => this.OnOptionSelected(index));
             }
         }
-        
+
+        // 查找钻机编辑界面实例（允许在场景中隐藏）
+        if (_drillEditorScreen == null)
+        {
+            _drillEditorScreen = FindObjectOfType<DrillEditorScreen>(true);
+            if (_drillEditorScreen == null)
+            {
+                Debug.LogWarning("UpgradeSelectionScreen: 未找到DrillEditorScreen，无法在解锁钻头造型后自动打开钻机编辑界面。");
+            }
+        }
+
         // 应用动态字体
         ApplyDynamicFont();
     }
@@ -659,6 +670,34 @@ public class UpgradeSelectionScreen : MonoBehaviour
         if (_gameManager != null)
         {
             _gameManager.ResumeGame();
+        }
+
+        // 如果本次选择的是解锁钻头造型（DrillShapeUnlock），在升级应用并关闭三选一界面后尝试自动打开钻机编辑界面
+        if (selectedOption != null && selectedOption.type == UpgradeOptionType.DrillShapeUnlock)
+        {
+            // 若还未缓存到实例，尝试动态查找一次（包含未激活对象）
+            if (_drillEditorScreen == null)
+            {
+                _drillEditorScreen = FindObjectOfType<DrillEditorScreen>(true);
+            }
+
+            if (_drillEditorScreen == null)
+            {
+                Debug.LogWarning("UpgradeSelectionScreen: 选择了DrillShapeUnlock但未找到DrillEditorScreen，无法自动打开钻机编辑界面。");
+            }
+            else
+            {
+                // 遵守编辑权限规则：只有在允许编辑时才自动打开界面
+                bool canEdit = _drillEditorScreen.CanEdit();
+                if (canEdit)
+                {
+                    _drillEditorScreen.Show();
+                }
+                else
+                {
+                    Debug.Log("UpgradeSelectionScreen: 当前状态不允许编辑钻头，本次不自动打开钻机编辑界面（玩家仍可稍后手动打开）。");
+                }
+            }
         }
 
         Debug.Log($"选择了升级: {selectedOption.name}");

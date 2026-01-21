@@ -2,7 +2,7 @@
     "shapes": [
         {
             "shapeId": "shape_single",
-            "shapeName": "������ͷ",
+            "shapeName": "单格钻头",
             "baseAttackStrength": 30,
             "cells": [
                 {
@@ -11,11 +11,11 @@
                 }
             ],
             "traits": [],
-            "description": "������ĵ�����ͷ������������"
+            "description": "最基础的单格钻头，便于理解伤害范围"
         },
         {
             "shapeId": "shape_cross_small",
-            "shapeName": "ʮ����ͷ",
+            "shapeName": "十字钻头",
             "baseAttackStrength": 15,
             "cells": [
                 {
@@ -40,11 +40,11 @@
                 }
             ],
             "traits": [],
-            "description": "ʮ����5����ͷ�����Ƿ�Χ��"
+            "description": "十字形5格钻头，覆盖上下左右四个方向"
         },
         {
             "shapeId": "shape_line_3",
-            "shapeName": "ֱ����ͷ",
+            "shapeName": "直线钻头",
             "baseAttackStrength": 15,
             "cells": [
                 {
@@ -63,18 +63,18 @@
             "traits": [
                 {
                     "traitId": "line_bonus",
-                    "traitName": "��͸ǿ��",
+                    "traitName": "贯通强化",
                     "triggerCondition": "always",
                     "effectType": "attack_multiplier",
                     "effectValue": 1.100000023841858,
-                    "description": "ֱ�߹���ʱ������+10%"
+                    "description": "直线贯通时伤害+10%"
                 }
             ],
-            "description": "����3���Դ�10%�����ӳ�"
+            "description": "直线3格钻头，拥有10%额外伤害加成"
         },
         {
             "shapeId": "shape_L",
-            "shapeName": "L����ͷ",
+            "shapeName": "L形钻头",
             "baseAttackStrength": 15,
             "cells": [
                 {
@@ -95,11 +95,11 @@
                 }
             ],
             "traits": [],
-            "description": "L��4����ͷ���������ת��Ӧ����"
+            "description": "L形4格钻头，适合处理拐角区域"
         },
         {
             "shapeId": "shape_T",
-            "shapeName": "T����ͷ",
+            "shapeName": "T形钻头",
             "baseAttackStrength": 15,
             "cells": [
                 {
@@ -120,11 +120,11 @@
                 }
             ],
             "traits": [],
-            "description": "T��4����ͷ��ƽ��ĸ��Ƿ�Χ"
+            "description": "T形4格钻头，覆盖前方较宽区域"
         },
         {
             "shapeId": "shape_square_2x2",
-            "shapeName": "������ͷ",
+            "shapeName": "方块钻头",
             "baseAttackStrength": 15,
             "cells": [
                 {
@@ -147,18 +147,18 @@
             "traits": [
                 {
                     "traitId": "square_stability",
-                    "traitName": "�ȶ��ṹ",
+                    "traitName": "稳定结构",
                     "triggerCondition": "always",
                     "effectType": "attack_multiplier",
                     "effectValue": 1.0499999523162842,
-                    "description": "���νṹ�ṩ5%�����ӳ�"
+                    "description": "方块结构提供5%额外伤害加成"
                 }
             ],
-            "description": "2x2������ͷ���ṹ�ȶ�"
+            "description": "2x2方块钻头，结构稳定"
         },
         {
             "shapeId": "shape_Z",
-            "shapeName": "Z����ͷ",
+            "shapeName": "Z形钻头",
             "baseAttackStrength": 15,
             "cells": [
                 {
@@ -179,11 +179,11 @@
                 }
             ],
             "traits": [],
-            "description": "Z��4����ͷ����λ����"
+            "description": "Z形4格钻头，适合斜向推进"
         },
         {
             "shapeId": "shape_S",
-            "shapeName": "S����ͷ",
+            "shapeName": "S形钻头",
             "baseAttackStrength": 15,
             "cells": [
                 {
@@ -204,11 +204,11 @@
                 }
             ],
             "traits": [],
-            "description": "S��4����ͷ����Z�;���"
+            "description": "S形4格钻头，与Z形互为镜像"
         },
         {
             "shapeId": "shape_line_4",
-            "shapeName": "������ͷ",
+            "shapeName": "长线钻头",
             "baseAttackStrength": 15,
             "cells": [
                 {
@@ -231,18 +231,18 @@
             "traits": [
                 {
                     "traitId": "line_4_bonus",
-                    "traitName": "��ȴ�͸",
+                    "traitName": "深度贯通",
                     "triggerCondition": "always",
                     "effectType": "attack_multiplier",
                     "effectValue": 1.149999976158142,
-                    "description": "��������ʱ������+15%"
+                    "description": "连续4格贯通时伤害+15%"
                 }
             ],
-            "description": "����4��������͸����ǿ"
+            "description": "长度为4的直线钻头，贯通能力更强"
         },
         {
             "shapeId": "shape_energy_extractor",
-            "shapeName": "��Դ��ȡ��",
+            "shapeName": "能源提取钻",
             "baseAttackStrength": 20,
             "cells": [
                 {
@@ -261,14 +261,14 @@
             "traits": [
                 {
                     "traitId": "energy_bonus",
-                    "traitName": "��Դ�׺�",
+                    "traitName": "能源收割",
                     "triggerCondition": "ore_type:energy",
                     "effectType": "attack_multiplier",
                     "effectValue": 1.5,
-                    "description": "�ھ���Դ��ʯʱ������+50%"
+                    "description": "在能源矿石上时伤害+50%"
                 }
             ],
-            "description": "ר�������ھ���Դ��ʯ����ͷ"
+            "description": "专门用于提取能源矿石的钻头"
         }
     ]
 }
