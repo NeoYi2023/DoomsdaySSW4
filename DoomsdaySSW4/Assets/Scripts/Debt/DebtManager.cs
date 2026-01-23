@@ -154,4 +154,28 @@ public class DebtManager : MonoBehaviour
     {
         return _debtData != null ? _debtData.currentShipId : "default_ship";
     }
+
+    /// <summary>
+    /// 增加债务（用于任务失败时扣除targetDebtAmount）
+    /// </summary>
+    public void AddDebt(int amount)
+    {
+        if (_debtData == null)
+        {
+            Debug.LogError("债务数据未初始化");
+            return;
+        }
+
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"DebtManager.cs:162\",\"message\":\"AddDebt called\",\"data\":{\"amount\":" + amount + ",\"oldTotalDebt\":" + _debtData.totalDebt + ",\"oldPaidDebt\":" + _debtData.paidDebt + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
+        _debtData.totalDebt += amount;
+
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"DebtManager.cs:168\",\"message\":\"After AddDebt\",\"data\":{\"newTotalDebt\":" + _debtData.totalDebt + ",\"remainingDebt\":" + _debtData.RemainingDebt + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
+        Debug.Log($"债务增加 {amount}，总债务: {_debtData.totalDebt}，剩余债务: {_debtData.RemainingDebt}");
+    }
 }

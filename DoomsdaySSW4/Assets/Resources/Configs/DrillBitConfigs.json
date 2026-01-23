@@ -1,0 +1,66 @@
+﻿{
+    "bits": [
+        {
+            "bitId": "bit_explosive",
+            "bitName": "爆炸钻头",
+            "description": "插入后挖掉矿石时对周围造成伤害",
+            "requiredSlotType": "Single",
+            "strengthBonus": 5,
+            "strengthMultiplier": 1.0,
+            "effectRange": 1,
+            "includeDiagonal": true,
+            "effects": [
+                {
+                    "effectType": "Explosion",
+                    "value": 10,
+                    "range": 1,
+                    "description": "挖掉矿石时对周围1格造成10点伤害"
+                }
+            ],
+            "iconPath": "UI/Icons/DrillBits/bit_explosive"
+        },
+        {
+            "bitId": "bit_chain",
+            "bitName": "连锁钻头",
+            "description": "挖掉矿石时触发连锁反应",
+            "requiredSlotType": "Single",
+            "strengthBonus": 3,
+            "strengthMultiplier": 1.0,
+            "effectRange": 1,
+            "includeDiagonal": false,
+            "effects": [
+                {
+                    "effectType": "ChainReaction",
+                    "value": 8,
+                    "range": 1,
+                    "description": "挖掉矿石时对周围相同类型矿石造成8点伤害"
+                }
+            ],
+            "iconPath": "UI/Icons/DrillBits/bit_chain"
+        },
+        {
+            "bitId": "bit_boost_quad",
+            "bitName": "强化钻头（4格）",
+            "description": "大幅提升周围钻探强度",
+            "requiredSlotType": "Quad",
+            "strengthBonus": 10,
+            "strengthMultiplier": 1.2000000476837159,
+            "effectRange": 2,
+            "includeDiagonal": true,
+            "effects": [],
+            "iconPath": "UI/Icons/DrillBits/bit_boost_quad"
+        },
+        {
+            "bitId": "bit_precision",
+            "bitName": "精准钻头",
+            "description": "小幅提升周围钻探强度",
+            "requiredSlotType": "Single",
+            "strengthBonus": 2,
+            "strengthMultiplier": 1.100000023841858,
+            "effectRange": 1,
+            "includeDiagonal": false,
+            "effects": [],
+            "iconPath": "UI/Icons/DrillBits/bit_precision"
+        }
+    ]
+}

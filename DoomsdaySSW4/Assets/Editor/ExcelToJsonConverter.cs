@@ -44,7 +44,7 @@ public class ExcelToJsonConverter : EditorWindow
         EditorGUILayout.LabelField("说明：", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
             "1. Excel文件命名格式：配置表名_中文备注字段.xlsx 或 .csv\n" +
-            "2. 支持的文件：TaskConfigs, OreConfigs, OreSpawnConfigs, DrillConfigs, DrillShapeConfigs, ShipConfigs, EnergyUpgradeConfigs, EnergyThresholds\n" +
+            "2. 支持的文件：TaskConfigs, OreConfigs, OreSpawnConfigs, DrillConfigs, DrillShapeConfigs, DrillBitConfigs, ShipConfigs, EnergyUpgradeConfigs, EnergyThresholds\n" +
             "3. Excel第一行必须是表头（字段名）\n" +
             "4. 字段名必须与C#类属性名完全匹配（区分大小写）\n" +
             "5. 如果Excel文件不可用，可以导出为CSV格式（UTF-8编码）\n" +
@@ -361,6 +361,8 @@ public class ExcelToJsonConverter : EditorWindow
                     return ConvertEnergyThresholdConfigs(data, outputPath);
                 case "DrillShapeConfigs":
                     return ConvertDrillShapeConfigs(data, outputPath);
+                case "DrillBitConfigs":
+                    return ConvertDrillBitConfigs(data, outputPath);
                 default:
                     AddLog($"  错误：不支持的配置表类型 - {configName}");
                     return false;
@@ -736,6 +738,67 @@ public class ExcelToJsonConverter : EditorWindow
         return true;
     }
 
+    /// <summary>
+    /// 转换DrillBitConfigs
+    /// </summary>
+    private bool ConvertDrillBitConfigs(List<Dictionary<string, string>> data, string outputPath)
+    {
+        List<DrillBitConfigJson> bits = new List<DrillBitConfigJson>();
+
+        foreach (var row in data)
+        {
+            try
+            {
+                DrillBitConfigJson bit = new DrillBitConfigJson
+                {
+                    bitId = GetString(row, "bitId"),
+                    bitName = GetString(row, "bitName"),
+                    description = GetString(row, "description"),
+                    requiredSlotType = GetString(row, "requiredSlotType"),
+                    strengthBonus = GetInt(row, "strengthBonus"),
+                    strengthMultiplier = GetFloat(row, "strengthMultiplier"),
+                    effectRange = GetInt(row, "effectRange"),
+                    includeDiagonal = GetBool(row, "includeDiagonal"),
+                    iconPath = GetString(row, "iconPath"),
+                    effects = new List<DrillBitEffectJson>()
+                };
+
+                // 解析effects字段（JSON字符串）
+                string effectsStr = GetString(row, "effects");
+                if (!string.IsNullOrEmpty(effectsStr))
+                {
+                    try
+                    {
+                        // 解析JSON字符串为DrillBitEffectJson数组
+                        // JsonUtility需要包装类来解析数组
+                        string wrappedJson = "{\"effects\":" + effectsStr + "}";
+                        DrillBitEffectJsonArrayWrapper wrapper = JsonUtility.FromJson<DrillBitEffectJsonArrayWrapper>(wrappedJson);
+                        if (wrapper != null && wrapper.effects != null)
+                        {
+                            bit.effects = new List<DrillBitEffectJson>(wrapper.effects);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        AddLog($"  警告：解析effects失败 - {e.Message}，跳过该钻头的后效");
+                        bit.effects = new List<DrillBitEffectJson>();
+                    }
+                }
+
+                bits.Add(bit);
+            }
+            catch (Exception e)
+            {
+                AddLog($"  警告：跳过无效行 - {e.Message}");
+            }
+        }
+
+        DrillBitConfigCollectionJson collection = new DrillBitConfigCollectionJson { bits = bits };
+        string json = JsonUtility.ToJson(collection, true);
+        File.WriteAllText(outputPath, json, Encoding.UTF8);
+        return true;
+    }
+
     // 辅助方法：从字典获取值
     private string GetString(Dictionary<string, string> row, string key)
     {
@@ -785,4 +848,13 @@ public class ExcelToJsonConverter : EditorWindow
 public class ShapeTraitConfigJsonArrayWrapper
 {
     public ShapeTraitConfigJson[] traits;
+}
+
+/// <summary>
+/// DrillBitEffect数组包装类（用于JsonUtility解析）
+/// </summary>
+[System.Serializable]
+public class DrillBitEffectJsonArrayWrapper
+{
+    public DrillBitEffectJson[] effects;
 }

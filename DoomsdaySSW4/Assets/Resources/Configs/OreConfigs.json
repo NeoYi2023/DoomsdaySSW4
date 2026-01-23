@@ -79,6 +79,22 @@
             "spawnProbability": 0.0,
             "spritePath": "UI/Ores/ore_energy_core",
             "latticeSpritePath": "UI/Lattice/Lattice_energy_core"
+        },
+        {
+            "oreId": "granite",
+            "oreName": "花岗岩",
+            "oreType": 0,
+            "hardness": 30,
+            "requiredAttributeKey": "",
+            "requiredAttributeValue": 0,
+            "value": 0,
+            "isEnergyOre": false,
+            "energyValue": 0,
+            "minDepth": 1,
+            "maxDepth": 5,
+            "spawnProbability": 0.0,
+            "spritePath": "UI/Ores/ore_granite",
+            "latticeSpritePath": "UI/Lattice/Lattice_granite"
         }
     ]
 }

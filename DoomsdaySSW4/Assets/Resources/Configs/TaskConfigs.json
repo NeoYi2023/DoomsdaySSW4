@@ -24,8 +24,44 @@
             "taskType": 0,
             "maxTurns": 20,
             "targetDebtAmount": 3000,
-            "nextTaskId": "",
+            "nextTaskId": "task_004",
             "description": "在20回合内再偿还3000债务"
+        },
+        {
+            "taskId": "task_004",
+            "taskName": "第三个任务",
+            "taskType": 0,
+            "maxTurns": 20,
+            "targetDebtAmount": 4000,
+            "nextTaskId": "task_005",
+            "description": "在20回合内再偿还4000债务"
+        },
+        {
+            "taskId": "task_005",
+            "taskName": "第三个任务",
+            "taskType": 0,
+            "maxTurns": 20,
+            "targetDebtAmount": 5000,
+            "nextTaskId": "task_006",
+            "description": "在20回合内再偿还5000债务"
+        },
+        {
+            "taskId": "task_006",
+            "taskName": "第三个任务",
+            "taskType": 0,
+            "maxTurns": 20,
+            "targetDebtAmount": 6000,
+            "nextTaskId": "task_007",
+            "description": "在20回合内再偿还6000债务"
+        },
+        {
+            "taskId": "task_007",
+            "taskName": "第三个任务",
+            "taskType": 0,
+            "maxTurns": 20,
+            "targetDebtAmount": 7000,
+            "nextTaskId": "",
+            "description": "在20回合内再偿还7000债务"
         }
     ]
 }

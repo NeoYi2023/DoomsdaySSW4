@@ -68,8 +68,17 @@ public class TurnManager : MonoBehaviour
     /// </summary>
     public void Initialize(int maxTurns)
     {
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"TurnManager.cs:69\",\"message\":\"Initialize called\",\"data\":{\"maxTurns\":" + maxTurns + ",\"currentMaxTurns\":" + _maxTurns + ",\"currentTurn\":" + _currentTurn + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
         _currentTurn = 0;
         _maxTurns = maxTurns;
+
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"TurnManager.cs:72\",\"message\":\"After Initialize\",\"data\":{\"maxTurns\":" + _maxTurns + ",\"currentTurn\":" + _currentTurn + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
         Debug.Log($"回合系统初始化，最大回合数: {_maxTurns}");
     }
 
@@ -210,10 +219,18 @@ public class TurnManager : MonoBehaviour
         // 检查任务失败
         if (_taskManager != null)
         {
+            // #region agent log
+            System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"TurnManager.cs:210\",\"message\":\"Before CheckTaskFailure\",\"data\":{\"currentTurn\":" + _currentTurn + ",\"maxTurns\":" + _maxTurns + ",\"isTurnLimitReached\":" + (IsTurnLimitReached() ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+            // #endregion
+
             _taskManager.CheckTaskFailure(_currentTurn);
         }
 
         OnTurnEnded?.Invoke(_currentTurn);
+
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"TurnManager.cs:216\",\"message\":\"Before checking turn limit\",\"data\":{\"currentTurn\":" + _currentTurn + ",\"maxTurns\":" + _maxTurns + ",\"isTurnLimitReached\":" + (IsTurnLimitReached() ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
 
         // 开始下一回合
         if (!IsTurnLimitReached())
@@ -222,7 +239,26 @@ public class TurnManager : MonoBehaviour
         }
         else
         {
+            // #region agent log
+            System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"TurnManager.cs:224\",\"message\":\"Turn limit reached\",\"data\":{\"currentTurn\":" + _currentTurn + ",\"maxTurns\":" + _maxTurns + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+            // #endregion
+
             Debug.LogWarning($"已达到回合限制: {_maxTurns}");
+            
+            // 修复BUG 2: 当达到maxTurns时，扣除任务要求的targetDebtAmount
+            if (_taskManager != null)
+            {
+                TaskData taskData = _taskManager.GetTaskData();
+                if (taskData != null && !taskData.isTaskCompleted && taskData.targetDebtAmount > 0)
+                {
+                    // #region agent log
+                    System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"TurnManager.cs:230\",\"message\":\"Deducting targetDebtAmount\",\"data\":{\"targetDebtAmount\":" + taskData.targetDebtAmount + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+                    // #endregion
+
+                    _debtManager.AddDebt(taskData.targetDebtAmount);
+                }
+            }
+
             // 达到回合限制，关闭自动挖矿
             if (_isAutoMiningEnabled)
             {
@@ -271,7 +307,31 @@ public class TurnManager : MonoBehaviour
     /// </summary>
     public void SetMaxTurns(int maxTurns)
     {
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"TurnManager.cs:272\",\"message\":\"SetMaxTurns called\",\"data\":{\"newMaxTurns\":" + maxTurns + ",\"oldMaxTurns\":" + _maxTurns + ",\"currentTurn\":" + _currentTurn + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
         _maxTurns = maxTurns;
+
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"TurnManager.cs:275\",\"message\":\"After SetMaxTurns\",\"data\":{\"maxTurns\":" + _maxTurns + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+    }
+
+    /// <summary>
+    /// 重置当前回合数（由任务系统调用，当切换任务时）
+    /// </summary>
+    public void ResetCurrentTurn()
+    {
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"TurnManager.cs:280\",\"message\":\"ResetCurrentTurn called\",\"data\":{\"oldCurrentTurn\":" + _currentTurn + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
+        _currentTurn = 0;
+
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"TurnManager.cs:283\",\"message\":\"After ResetCurrentTurn\",\"data\":{\"currentTurn\":" + _currentTurn + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
     }
     
     /// <summary>

@@ -1,4 +1,8 @@
-taskId,taskName,taskType,maxTurns,targetDebtAmount,nextTaskId,description
+﻿taskId,taskName,taskType,maxTurns,targetDebtAmount,nextTaskId,description
 task_001,第一个任务,Basic,10,1000,task_002,在10回合内偿还1000债务
 task_002,第二个任务,Basic,15,2000,task_003,在15回合内再偿还2000债务
-task_003,第三个任务,Basic,20,3000,,在20回合内再偿还3000债务
+task_003,第三个任务,Basic,20,3000,task_004,在20回合内再偿还3000债务
+task_004,第三个任务,Basic,20,4000,task_005,在20回合内再偿还4000债务
+task_005,第三个任务,Basic,20,5000,task_006,在20回合内再偿还5000债务
+task_006,第三个任务,Basic,20,6000,task_007,在20回合内再偿还6000债务
+task_007,第三个任务,Basic,20,7000,,在20回合内再偿还7000债务

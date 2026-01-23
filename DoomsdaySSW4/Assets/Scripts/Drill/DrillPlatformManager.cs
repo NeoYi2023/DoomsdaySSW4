@@ -725,7 +725,7 @@ public class DrillPlatformManager : MonoBehaviour
     public List<PlacedDrillBit> GetBitsAffectingCell(Vector2Int position)
     {
         if (_platformData == null) return new List<PlacedDrillBit>();
-        return _platformData.GetBitsAffectingCell(position, _configManager?.GetDrillBitConfig);
+        return _platformData.GetBitsAffectingCell(position, _configManager != null ? _configManager.GetDrillBitConfig : null);
     }
 
     /// <summary>
@@ -738,7 +738,7 @@ public class DrillPlatformManager : MonoBehaviour
         // 获取该位置的造型
         PlacedDrillShape shape = _platformData.FindShapeAtPosition(
             position, 
-            _configManager?.GetDrillShapeConfig);
+            _configManager != null ? _configManager.GetDrillShapeConfig : null);
         
         if (shape == null) return 0;
 

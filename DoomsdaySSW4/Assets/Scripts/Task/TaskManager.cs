@@ -114,6 +114,10 @@ public class TaskManager : MonoBehaviour
     /// </summary>
     public void StartTask(string taskId)
     {
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"TaskManager.cs:115\",\"message\":\"StartTask called\",\"data\":{\"taskId\":\"" + taskId + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
         // 确保 ConfigManager 已初始化（防止在 Start() 之前调用）
         EnsureManagers();
 
@@ -123,6 +127,10 @@ public class TaskManager : MonoBehaviour
             Debug.LogError($"无法加载任务配置: {taskId}");
             return;
         }
+
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"TaskManager.cs:127\",\"message\":\"Before updating TaskData\",\"data\":{\"taskId\":\"" + taskId + "\",\"configMaxTurns\":" + config.maxTurns + ",\"currentTaskDataMaxTurns\":" + (_taskData != null ? _taskData.maxTurns : -1) + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
 
         // 重置任务状态
         _taskData.currentTaskId = taskId;
@@ -134,10 +142,22 @@ public class TaskManager : MonoBehaviour
         _taskData.maxTurns = config.maxTurns;
         _taskData.currentTurn = 0;
 
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"TaskManager.cs:134\",\"message\":\"After updating TaskData\",\"data\":{\"taskId\":\"" + taskId + "\",\"taskDataMaxTurns\":" + _taskData.maxTurns + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
         // 更新任务索引
         if (_taskData.basicTasks.Contains(taskId))
         {
             _taskData.currentTaskIndex = _taskData.basicTasks.IndexOf(taskId);
+        }
+
+        // 修复BUG 1: 更新TurnManager的maxTurns并重置currentTurn
+        TurnManager turnManager = TurnManager.Instance;
+        if (turnManager != null)
+        {
+            turnManager.SetMaxTurns(config.maxTurns);
+            turnManager.ResetCurrentTurn();
         }
 
         Debug.Log($"任务开始: {config.taskName}, 目标: 偿还 {config.targetDebtAmount} 债务, 回合限制: {config.maxTurns}");
@@ -210,6 +230,10 @@ public class TaskManager : MonoBehaviour
     /// </summary>
     public void CompleteCurrentTask()
     {
+        // #region agent log
+        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"TaskManager.cs:211\",\"message\":\"CompleteCurrentTask called\",\"data\":{\"currentTaskId\":\"" + (_taskData != null && !string.IsNullOrEmpty(_taskData.currentTaskId) ? _taskData.currentTaskId : "null") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+        // #endregion
+
         EnsureManagers();
 
         if (_taskData == null || string.IsNullOrEmpty(_taskData.currentTaskId))
@@ -223,6 +247,10 @@ public class TaskManager : MonoBehaviour
         TaskConfig currentConfig = _configManager.GetTaskConfig(_taskData.currentTaskId);
         if (currentConfig != null && !string.IsNullOrEmpty(currentConfig.nextTaskId))
         {
+            // #region agent log
+            System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"TaskManager.cs:224\",\"message\":\"Before StartTask for next task\",\"data\":{\"nextTaskId\":\"" + currentConfig.nextTaskId + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
+            // #endregion
+
             // 自动领取下一个任务
             StartTask(currentConfig.nextTaskId);
         }
