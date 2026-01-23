@@ -25,6 +25,16 @@ public class DrillPlatformData
     public List<string> availableShapeIds = new List<string>();
     
     /// <summary>
+    /// 已放置的插槽列表（从已放置的造型中提取）
+    /// </summary>
+    public List<PlacedDrillSlot> placedSlots = new List<PlacedDrillSlot>();
+    
+    /// <summary>
+    /// 已插入的钻头列表
+    /// </summary>
+    public List<PlacedDrillBit> insertedBits = new List<PlacedDrillBit>();
+    
+    /// <summary>
     /// 获取平台上所有被占用的格子坐标
     /// </summary>
     /// <param name="getShapeConfig">获取造型配置的委托</param>
@@ -118,6 +128,95 @@ public class DrillPlatformData
     }
     
     /// <summary>
+    /// 根据插槽ID查找插槽
+    /// </summary>
+    public PlacedDrillSlot FindSlotById(string slotId)
+    {
+        return placedSlots.Find(s => s.slotId == slotId);
+    }
+    
+    /// <summary>
+    /// 根据位置查找插槽
+    /// </summary>
+    public PlacedDrillSlot FindSlotAtPosition(Vector2Int position)
+    {
+        return placedSlots.Find(s => s.platformPosition == position);
+    }
+    
+    /// <summary>
+    /// 根据钻头实例ID查找钻头
+    /// </summary>
+    public PlacedDrillBit FindBitByInstanceId(string instanceId)
+    {
+        return insertedBits.Find(b => b.instanceId == instanceId);
+    }
+    
+    /// <summary>
+    /// 根据插槽ID查找插入的钻头
+    /// </summary>
+    public PlacedDrillBit FindBitBySlotId(string slotId)
+    {
+        return insertedBits.Find(b => b.slotId == slotId);
+    }
+    
+    /// <summary>
+    /// 获取影响指定格子的所有钻头
+    /// </summary>
+    /// <param name="position">格子位置</param>
+    /// <param name="getBitConfig">获取钻头配置的委托</param>
+    /// <returns>影响该格子的钻头列表</returns>
+    public List<PlacedDrillBit> GetBitsAffectingCell(Vector2Int position, Func<string, DrillBitConfig> getBitConfig)
+    {
+        List<PlacedDrillBit> affectingBits = new List<PlacedDrillBit>();
+        
+        foreach (var bit in insertedBits)
+        {
+            DrillBitConfig config = getBitConfig?.Invoke(bit.bitId);
+            if (config == null) continue;
+            
+            // 计算钻头影响范围
+            int distance = GetManhattanDistance(bit.platformPosition, position);
+            if (config.includeDiagonal)
+            {
+                // 包括斜角，使用切比雪夫距离
+                distance = GetChebyshevDistance(bit.platformPosition, position);
+            }
+            
+            if (distance <= config.effectRange)
+            {
+                affectingBits.Add(bit);
+            }
+        }
+        
+        return affectingBits;
+    }
+    
+    /// <summary>
+    /// 计算曼哈顿距离（不包括斜角）
+    /// </summary>
+    private int GetManhattanDistance(Vector2Int a, Vector2Int b)
+    {
+        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+    }
+    
+    /// <summary>
+    /// 计算切比雪夫距离（包括斜角）
+    /// </summary>
+    private int GetChebyshevDistance(Vector2Int a, Vector2Int b)
+    {
+        return Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));
+    }
+    
+    /// <summary>
+    /// 清空所有插槽和钻头
+    /// </summary>
+    public void ClearSlotsAndBits()
+    {
+        placedSlots.Clear();
+        insertedBits.Clear();
+    }
+    
+    /// <summary>
     /// 克隆平台数据（用于预览等场景）
     /// </summary>
     public DrillPlatformData Clone()
@@ -128,6 +227,16 @@ public class DrillPlatformData
         foreach (var shape in this.placedShapes)
         {
             clone.placedShapes.Add(shape.Clone());
+        }
+        
+        foreach (var slot in this.placedSlots)
+        {
+            clone.placedSlots.Add(slot.Clone());
+        }
+        
+        foreach (var bit in this.insertedBits)
+        {
+            clone.insertedBits.Add(bit.Clone());
         }
         
         return clone;

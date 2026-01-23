@@ -41,6 +41,11 @@ public class DrillShapeConfig
     public string description;
     
     /// <summary>
+    /// 该造型上的钻头插槽配置列表
+    /// </summary>
+    public List<DrillSlotConfig> slots = new List<DrillSlotConfig>();
+    
+    /// <summary>
     /// 获取造型占用的格子数量
     /// </summary>
     public int CellCount => cells?.Count ?? 0;

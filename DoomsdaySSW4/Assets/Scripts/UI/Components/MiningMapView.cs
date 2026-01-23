@@ -53,6 +53,9 @@ public class MiningMapView : MonoBehaviour
     [Header("伤害高亮设置")]
     [SerializeField] private Color damageHighlightColor = new Color(1f, 0f, 0f, 0.4f); // 红色半透明高亮
     
+    [Header("迷雾遮罩设置")]
+    [SerializeField] private FogMaskView fogMaskView; // 迷雾遮罩视图引用（可选，如果为空则自动查找）
+    
     private readonly Color _defaultOreColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
     
     // 已挖掘格子图片路径
@@ -109,6 +112,9 @@ public class MiningMapView : MonoBehaviour
         // 加载中文字体
         LoadChineseFont();
         
+        // 初始化迷雾遮罩视图
+        InitializeFogMaskView();
+        
         // 如果启用自适应，计算格子大小
         if (autoResize)
         {
@@ -117,6 +123,50 @@ public class MiningMapView : MonoBehaviour
         
         // 初始化地图显示
         UpdateMap(1);
+    }
+    
+    /// <summary>
+    /// 初始化迷雾遮罩视图
+    /// </summary>
+    private void InitializeFogMaskView()
+    {
+        // #region agent log
+        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"InitializeFogMaskView entry\",\"data\":{{\"fogMaskViewBefore\":{fogMaskView != null}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
+        // #endregion
+        // 如果未在Inspector中指定，尝试自动查找
+        if (fogMaskView == null)
+        {
+            // 在子对象中查找FogMaskView
+            fogMaskView = GetComponentInChildren<FogMaskView>();
+            
+            // #region agent log
+            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"After GetComponentInChildren\",\"data\":{{\"fogMaskViewFound\":{fogMaskView != null}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
+            // #endregion
+            
+            // 如果还是找不到，尝试在父对象的子对象中查找
+            if (fogMaskView == null && transform.parent != null)
+            {
+                fogMaskView = transform.parent.GetComponentInChildren<FogMaskView>();
+                // #region agent log
+                try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"After parent search\",\"data\":{{\"fogMaskViewFound\":{fogMaskView != null}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
+                // #endregion
+            }
+        }
+        
+        // 如果找到了FogMaskView，同步布局设置
+        if (fogMaskView != null && gridLayout != null)
+        {
+            fogMaskView.SyncLayoutWithMiningMap(gridLayout);
+            // #region agent log
+            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"FogMaskView found and synced\",\"data\":{{}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
+            // #endregion
+        }
+        else
+        {
+            // #region agent log
+            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"FogMaskView not found or gridLayout null\",\"data\":{{\"fogMaskViewNull\":{fogMaskView == null},\"gridLayoutNull\":{gridLayout == null}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
+            // #endregion
+        }
     }
 
     private void OnRectTransformDimensionsChange()
@@ -186,12 +236,24 @@ public class MiningMapView : MonoBehaviour
         if (cellWidth > 0 && cellHeight > 0)
         {
             gridLayout.cellSize = new Vector2(cellWidth, cellHeight);
+            
+            // 同步迷雾遮罩的布局
+            if (fogMaskView != null)
+            {
+                fogMaskView.SyncLayoutWithMiningMap(gridLayout);
+            }
         }
         else
         {
             // 如果计算失败，使用默认值
             Debug.LogWarning($"MiningMapView: 无法计算自适应格子大小（容器大小: {containerWidth}x{containerHeight}），使用默认值60x60");
             gridLayout.cellSize = new Vector2(60, 60);
+            
+            // 同步迷雾遮罩的布局
+            if (fogMaskView != null)
+            {
+                fogMaskView.SyncLayoutWithMiningMap(gridLayout);
+            }
         }
     }
 
@@ -274,6 +336,21 @@ public class MiningMapView : MonoBehaviour
         if (enableHighlight)
         {
             UpdateHighlight();
+        }
+        
+        // 更新迷雾遮罩
+        // #region agent log
+        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:UpdateMap\",\"message\":\"Before fogMaskView update\",\"data\":{{\"fogMaskViewNull\":{fogMaskView == null},\"layerDepth\":{layerDepth}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
+        // #endregion
+        if (fogMaskView != null)
+        {
+            fogMaskView.UpdateFog(layerDepth);
+        }
+        else
+        {
+            // #region agent log
+            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:UpdateMap\",\"message\":\"fogMaskView is null, UpdateFog not called\",\"data\":{{}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
+            // #endregion
         }
     }
 

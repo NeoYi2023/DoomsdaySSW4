@@ -1,0 +1,5 @@
+bitId,bitName,description,requiredSlotType,strengthBonus,strengthMultiplier,effectRange,includeDiagonal,effects,iconPath
+bit_explosive,爆炸钻头,插入后挖掉矿石时对周围造成伤害,Single,5,1.0,1,true,"[{""effectType"":""Explosion"",""value"":10,""range"":1,""description"":""挖掉矿石时对周围1格造成10点伤害""}]",UI/Icons/DrillBits/bit_explosive
+bit_chain,连锁钻头,挖掉矿石时触发连锁反应,Single,3,1.0,1,false,"[{""effectType"":""ChainReaction"",""value"":8,""range"":1,""description"":""挖掉矿石时对周围相同类型矿石造成8点伤害""}]",UI/Icons/DrillBits/bit_chain
+bit_boost_quad,强化钻头（4格）,大幅提升周围钻探强度,Quad,10,1.2,2,true,"[]",UI/Icons/DrillBits/bit_boost_quad
+bit_precision,精准钻头,小幅提升周围钻探强度,Single,2,1.1,1,false,"[]",UI/Icons/DrillBits/bit_precision

@@ -64,17 +64,17 @@ public class DrillAttackCalculator : MonoBehaviour
             
             List<Vector2Int> occupiedCells = placedShape.GetOccupiedCells(config);
             
-            // 计算该造型的攻击强度
-            float attackStrength = CalculateShapeAttackStrength(config, placedShape, drillData);
-            
             foreach (var cell in occupiedCells)
             {
+                // 计算该格子的攻击强度（考虑钻头加成）
+                int attackStrength = CalculateCellAttackStrength(cell, config, placedShape, drillData);
+                
                 if (!attackMap.ContainsKey(cell))
                 {
                     attackMap[cell] = new CellAttackInfo
                     {
                         position = cell,
-                        attackStrength = Mathf.RoundToInt(attackStrength),
+                        attackStrength = attackStrength,
                         sourceShapeId = placedShape.shapeId,
                         sourceInstanceId = placedShape.instanceId
                     };
@@ -178,7 +178,46 @@ public class DrillAttackCalculator : MonoBehaviour
     }
 
     /// <summary>
-    /// 计算对特定矿石的攻击强度（考虑矿石类型触发的特性）
+    /// 计算指定格子的攻击强度（考虑钻头加成）
+    /// </summary>
+    /// <param name="position">格子位置</param>
+    /// <param name="shapeConfig">造型配置</param>
+    /// <param name="placedShape">放置的造型实例</param>
+    /// <param name="drillData">钻头数据</param>
+    /// <param name="targetOreType">目标矿石类型（可选）</param>
+    /// <returns>攻击强度</returns>
+    public int CalculateCellAttackStrength(
+        Vector2Int position, 
+        DrillShapeConfig shapeConfig, 
+        PlacedDrillShape placedShape, 
+        DrillData drillData = null, 
+        string targetOreType = null)
+    {
+        // 计算基础强度（来自造型）
+        float baseStrength = CalculateShapeAttackStrength(shapeConfig, placedShape, drillData, targetOreType);
+        
+        // 获取影响该格子的钻头
+        List<PlacedDrillBit> affectingBits = _platformManager.GetBitsAffectingCell(position);
+        
+        // 计算钻头加成
+        int totalBonus = 0;
+        float totalMultiplier = 1f;
+        foreach (var bit in affectingBits)
+        {
+            DrillBitConfig bitConfig = _configManager?.GetDrillBitConfig(bit.bitId);
+            if (bitConfig != null)
+            {
+                totalBonus += bitConfig.strengthBonus;
+                totalMultiplier *= bitConfig.strengthMultiplier;
+            }
+        }
+        
+        // 最终强度 = (基础强度 + 加成) × 倍率
+        return Mathf.RoundToInt((baseStrength + totalBonus) * totalMultiplier);
+    }
+
+    /// <summary>
+    /// 计算对特定矿石的攻击强度（考虑矿石类型触发的特性和钻头加成）
     /// </summary>
     /// <param name="position">攻击位置</param>
     /// <param name="oreType">矿石类型</param>
@@ -194,8 +233,8 @@ public class DrillAttackCalculator : MonoBehaviour
         DrillShapeConfig config = _configManager.GetDrillShapeConfig(shape.shapeId);
         if (config == null) return 0;
         
-        float strength = CalculateShapeAttackStrength(config, shape, drillData, oreType);
-        return Mathf.RoundToInt(strength);
+        // 使用新的计算方法，考虑钻头加成
+        return CalculateCellAttackStrength(position, config, shape, drillData, oreType);
     }
 
     /// <summary>

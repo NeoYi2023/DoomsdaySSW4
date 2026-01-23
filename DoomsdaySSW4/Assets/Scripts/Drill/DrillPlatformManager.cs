@@ -142,6 +142,9 @@ public class DrillPlatformManager : MonoBehaviour
         
         // 从库存中移除（如果在库存中）
         _platformData.availableShapeIds.Remove(config.shapeId);
+        
+        // 更新插槽列表
+        UpdateSlotsForShape(placedShape, shapeConfig);
 
         Debug.Log($"初始造型 {config.shapeId} 放置成功，位置: {position}，旋转: {rotation}");
     }
@@ -212,6 +215,9 @@ public class DrillPlatformManager : MonoBehaviour
         // 放置成功
         _platformData.placedShapes.Add(tempShape);
         _platformData.availableShapeIds.Remove(shapeId);
+        
+        // 更新插槽列表
+        UpdateSlotsForShape(tempShape, config);
 
         OnShapePlaced?.Invoke(tempShape);
         OnPlatformChanged?.Invoke();
@@ -231,6 +237,9 @@ public class DrillPlatformManager : MonoBehaviour
 
         PlacedDrillShape shape = _platformData.FindPlacedShapeByInstanceId(instanceId);
         if (shape == null) return false;
+
+        // 移除该造型的所有插槽和钻头
+        RemoveSlotsForShape(instanceId);
 
         _platformData.placedShapes.Remove(shape);
         
@@ -518,6 +527,258 @@ public class DrillPlatformManager : MonoBehaviour
 
         return new PlaceResult { success = true };
     }
+
+    #region 插槽管理
+
+    /// <summary>
+    /// 更新造型的插槽列表（当造型放置或旋转时调用）
+    /// </summary>
+    private void UpdateSlotsForShape(PlacedDrillShape shape, DrillShapeConfig config)
+    {
+        if (config == null || config.slots == null || config.slots.Count == 0)
+        {
+            return;
+        }
+
+        // 移除该造型的旧插槽
+        RemoveSlotsForShape(shape.instanceId);
+
+        // 添加新插槽
+        foreach (var slotConfig in config.slots)
+        {
+            // 计算插槽在平台上的绝对位置
+            List<Vector2Int> rotatedSlotPositions = DrillShapeRotator.RotateCells(
+                new List<Vector2Int> { slotConfig.position }, 
+                shape.rotation);
+            
+            if (rotatedSlotPositions.Count > 0)
+            {
+                Vector2Int absolutePosition = shape.position + rotatedSlotPositions[0];
+                
+                // 检查位置是否在边界内
+                if (DrillPlatformData.IsWithinBounds(absolutePosition))
+                {
+                    PlacedDrillSlot slot = new PlacedDrillSlot
+                    {
+                        slotId = string.IsNullOrEmpty(slotConfig.slotId) 
+                            ? $"{shape.instanceId}_slot_{_platformData.placedSlots.Count}" 
+                            : slotConfig.slotId,
+                        platformPosition = absolutePosition,
+                        slotType = slotConfig.slotType,
+                        insertedBitId = string.Empty,
+                        shapeInstanceId = shape.instanceId
+                    };
+                    
+                    _platformData.placedSlots.Add(slot);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 移除造型的所有插槽（当造型移除时调用）
+    /// </summary>
+    private void RemoveSlotsForShape(string shapeInstanceId)
+    {
+        // 移除该造型的所有插槽
+        List<PlacedDrillSlot> slotsToRemove = _platformData.placedSlots
+            .FindAll(s => s.shapeInstanceId == shapeInstanceId);
+        
+        foreach (var slot in slotsToRemove)
+        {
+            // 如果插槽中有钻头，先移除钻头
+            if (!string.IsNullOrEmpty(slot.insertedBitId))
+            {
+                PlacedDrillBit bit = _platformData.FindBitBySlotId(slot.slotId);
+                if (bit != null)
+                {
+                    _platformData.insertedBits.Remove(bit);
+                }
+            }
+            
+            _platformData.placedSlots.Remove(slot);
+        }
+    }
+
+    /// <summary>
+    /// 获取平台上所有可用的插槽（未插入钻头的）
+    /// </summary>
+    public List<PlacedDrillSlot> GetAvailableSlots()
+    {
+        if (_platformData == null) return new List<PlacedDrillSlot>();
+        return _platformData.placedSlots.FindAll(s => !s.IsOccupied);
+    }
+
+    /// <summary>
+    /// 获取所有插槽（包括已插入的）
+    /// </summary>
+    public List<PlacedDrillSlot> GetAllSlots()
+    {
+        if (_platformData == null) return new List<PlacedDrillSlot>();
+        return new List<PlacedDrillSlot>(_platformData.placedSlots);
+    }
+
+    /// <summary>
+    /// 根据位置获取插槽
+    /// </summary>
+    public PlacedDrillSlot GetSlotAtPosition(Vector2Int position)
+    {
+        if (_platformData == null) return null;
+        return _platformData.FindSlotAtPosition(position);
+    }
+
+    #endregion
+
+    #region 钻头管理
+
+    /// <summary>
+    /// 将钻头插入插槽
+    /// </summary>
+    public InsertBitResult InsertDrillBit(string bitId, string slotId)
+    {
+        if (_platformData == null)
+        {
+            return new InsertBitResult { success = false, errorMessage = "平台未初始化" };
+        }
+
+        // 检查插槽是否存在
+        PlacedDrillSlot slot = _platformData.FindSlotById(slotId);
+        if (slot == null)
+        {
+            return new InsertBitResult { success = false, errorMessage = "找不到指定插槽" };
+        }
+
+        // 检查插槽是否已被占用
+        if (slot.IsOccupied)
+        {
+            return new InsertBitResult { success = false, errorMessage = "插槽已被占用" };
+        }
+
+        // 检查钻头是否存在
+        DrillBitConfig bitConfig = _configManager?.GetDrillBitConfig(bitId);
+        if (bitConfig == null)
+        {
+            return new InsertBitResult { success = false, errorMessage = "找不到钻头配置" };
+        }
+
+        // 检查插槽类型是否匹配
+        if (bitConfig.requiredSlotType != slot.slotType)
+        {
+            return new InsertBitResult 
+            { 
+                success = false, 
+                errorMessage = $"插槽类型不匹配：需要 {bitConfig.requiredSlotType}，但插槽是 {slot.slotType}" 
+            };
+        }
+
+        // 检查钻头是否已解锁
+        DrillBitManager bitManager = DrillBitManager.Instance;
+        if (!bitManager.IsBitUnlocked(bitId))
+        {
+            return new InsertBitResult { success = false, errorMessage = "钻头未解锁" };
+        }
+
+        // 插入钻头
+        PlacedDrillBit placedBit = new PlacedDrillBit
+        {
+            bitId = bitId,
+            slotId = slotId,
+            platformPosition = slot.platformPosition
+        };
+
+        _platformData.insertedBits.Add(placedBit);
+        slot.insertedBitId = bitId;
+
+        OnPlatformChanged?.Invoke();
+        Debug.Log($"钻头 {bitId} 已插入插槽 {slotId}");
+        
+        return new InsertBitResult { success = true, placedBit = placedBit };
+    }
+
+    /// <summary>
+    /// 移除钻头
+    /// </summary>
+    public bool RemoveDrillBit(string instanceId)
+    {
+        if (_platformData == null) return false;
+
+        PlacedDrillBit bit = _platformData.FindBitByInstanceId(instanceId);
+        if (bit == null) return false;
+
+        // 清除插槽中的钻头引用
+        PlacedDrillSlot slot = _platformData.FindSlotById(bit.slotId);
+        if (slot != null)
+        {
+            slot.insertedBitId = string.Empty;
+        }
+
+        _platformData.insertedBits.Remove(bit);
+
+        OnPlatformChanged?.Invoke();
+        Debug.Log($"钻头 {bit.bitId} 已移除");
+        return true;
+    }
+
+    /// <summary>
+    /// 获取影响指定格子的所有钻头
+    /// </summary>
+    public List<PlacedDrillBit> GetBitsAffectingCell(Vector2Int position)
+    {
+        if (_platformData == null) return new List<PlacedDrillBit>();
+        return _platformData.GetBitsAffectingCell(position, _configManager?.GetDrillBitConfig);
+    }
+
+    /// <summary>
+    /// 计算指定格子的最终钻探强度（基础强度 + 钻头加成）
+    /// </summary>
+    public int CalculateCellStrength(Vector2Int position, DrillData drillData = null)
+    {
+        if (_platformData == null) return 0;
+
+        // 获取该位置的造型
+        PlacedDrillShape shape = _platformData.FindShapeAtPosition(
+            position, 
+            _configManager?.GetDrillShapeConfig);
+        
+        if (shape == null) return 0;
+
+        DrillShapeConfig shapeConfig = _configManager?.GetDrillShapeConfig(shape.shapeId);
+        if (shapeConfig == null) return 0;
+
+        // 计算基础强度（使用现有的攻击计算器）
+        DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
+        float baseStrength = calculator.CalculateShapeAttackStrength(shapeConfig, shape, drillData);
+
+        // 获取影响该格子的钻头
+        List<PlacedDrillBit> affectingBits = GetBitsAffectingCell(position);
+
+        // 计算钻头加成
+        int totalBonus = 0;
+        float totalMultiplier = 1f;
+        foreach (var bit in affectingBits)
+        {
+            DrillBitConfig bitConfig = _configManager?.GetDrillBitConfig(bit.bitId);
+            if (bitConfig != null)
+            {
+                totalBonus += bitConfig.strengthBonus;
+                totalMultiplier *= bitConfig.strengthMultiplier;
+            }
+        }
+
+        // 最终强度 = (基础强度 + 加成) × 倍率
+        return Mathf.RoundToInt((baseStrength + totalBonus) * totalMultiplier);
+    }
+
+    /// <summary>
+    /// 获取所有已插入的钻头
+    /// </summary>
+    public List<PlacedDrillBit> GetInsertedBits()
+    {
+        if (_platformData == null) return new List<PlacedDrillBit>();
+        return new List<PlacedDrillBit>(_platformData.insertedBits);
+    }
+
+    #endregion
 }
 
 /// <summary>
@@ -529,4 +790,15 @@ public class PlaceResult
     public bool success;
     public string errorMessage;
     public PlacedDrillShape placedShape;
+}
+
+/// <summary>
+/// 插入钻头操作结果
+/// </summary>
+[Serializable]
+public class InsertBitResult
+{
+    public bool success;
+    public string errorMessage;
+    public PlacedDrillBit placedBit;
 }

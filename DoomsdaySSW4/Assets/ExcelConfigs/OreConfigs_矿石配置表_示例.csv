@@ -1,6 +1,7 @@
-oreId,oreName,oreType,hardness,requiredAttributeKey,requiredAttributeValue,value,isEnergyOre,energyValue,minDepth,maxDepth,spawnProbability,spritePath,latticeSpritePath
-iron,铁矿石,Common,10,,0,50,false,0,1,5,0.0,UI/Ores/ore_iron,UI/Lattice/Lattice_iron
-gold,金矿石,Rare,20,,0,200,false,0,2,10,0.0,UI/Ores/ore_gold,UI/Lattice/Lattice_gold
-diamond,钻石,Rare,35,,0,500,false,0,4,10,0.0,UI/Ores/ore_diamond,UI/Lattice/Lattice_diamond
-crystal,水晶,Special,25,,0,300,false,0,3,9,0.0,UI/Ores/ore_crystal,UI/Lattice/Lattice_crystal
-energy_core,能源核心,Energy,15,,0,0,true,10,1,10,0.0,UI/Ores/ore_energy_core,UI/Lattice/Lattice_energy_core
+﻿oreId,oreName,oreType,hardness,requiredAttributeKey,requiredAttributeValue,value,isEnergyOre,energyValue,minDepth,maxDepth,spawnProbability,spritePath,latticeSpritePath
+iron,铁矿石,Common,10,,0,50,FALSE,0,1,5,0,UI/Ores/ore_iron,UI/Lattice/Lattice_iron
+gold,金矿石,Rare,20,,0,200,FALSE,0,2,10,0,UI/Ores/ore_gold,UI/Lattice/Lattice_gold
+diamond,钻石,Rare,35,,0,500,FALSE,0,4,10,0,UI/Ores/ore_diamond,UI/Lattice/Lattice_diamond
+crystal,水晶,Special,25,,0,300,FALSE,0,3,9,0,UI/Ores/ore_crystal,UI/Lattice/Lattice_crystal
+energy_core,能源核心,Energy,15,,0,0,TRUE,10,1,10,0,UI/Ores/ore_energy_core,UI/Lattice/Lattice_energy_core
+granite,花岗岩,Common,30,,0,0,FALSE,0,1,5,0,UI/Ores/ore_granite,UI/Lattice/Lattice_granite

@@ -499,6 +499,50 @@ public class EnergyUpgradeManager : MonoBehaviour
                 }
                 break;
 
+            case UpgradeOptionType.DrillPlatformUpgrade:
+                // 钻机平台升级：提升基础强度或增加插槽
+                // upgradeId 指向造型ID，value 表示强度提升值或插槽数量
+                if (platformManager != null && !string.IsNullOrEmpty(option.upgradeId))
+                {
+                    DrillPlatformData platformData = platformManager.GetPlatformData();
+                    if (platformData != null)
+                    {
+                        // 查找该造型的所有已放置实例
+                        List<PlacedDrillShape> shapes = platformData.placedShapes
+                            .FindAll(s => s.shapeId == option.upgradeId);
+                        
+                        if (shapes.Count > 0)
+                        {
+                            // 提升所有该造型实例的基础强度
+                            // 注意：这里通过永久加成来实现，实际实现可能需要更复杂的机制
+                            if (drill != null)
+                            {
+                                drill.permanentStrengthBonus += option.value;
+                                Debug.Log($"钻机平台 {option.upgradeId} 基础强度提升: +{option.value}，当前总加成: {drill.permanentStrengthBonus}");
+                            }
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"尝试升级钻机平台失败，造型 {option.upgradeId} 未放置在平台上");
+                        }
+                    }
+                }
+                break;
+
+            case UpgradeOptionType.DrillBitUnlock:
+                // 解锁新钻头：将钻头加入库存
+                DrillBitManager bitManager = DrillBitManager.Instance;
+                if (bitManager != null && !string.IsNullOrEmpty(option.upgradeId))
+                {
+                    bitManager.UnlockBit(option.upgradeId);
+                    Debug.Log($"解锁钻头: {option.upgradeId}，已加入钻头库存");
+                }
+                else
+                {
+                    Debug.LogWarning($"尝试解锁钻头失败，upgradeId 无效: {option.upgradeId}");
+                }
+                break;
+
             default:
                 Debug.LogWarning($"未知的升级类型: {option.type}");
                 break;

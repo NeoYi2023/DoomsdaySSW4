@@ -47,6 +47,8 @@ public enum UpgradeOptionType
     MiningEfficiency,   // 挖掘效率提升
     OreDiscovery,       // 矿石发现能力提升
     OreValueBoost,      // 矿石价值提升
-    DrillShapeUnlock    // 解锁钻头造型（将指定造型加入当前关卡可用库存）
+    DrillShapeUnlock,   // 解锁钻头造型（将指定造型加入当前关卡可用库存）
+    DrillPlatformUpgrade,  // 钻机平台升级（提升基础强度或增加插槽）
+    DrillBitUnlock      // 解锁新钻头
 }
 

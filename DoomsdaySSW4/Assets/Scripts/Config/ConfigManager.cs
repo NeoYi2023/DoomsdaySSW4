@@ -36,6 +36,9 @@ public class ConfigManager : MonoBehaviour
     // 钻头造型配置
     private Dictionary<string, DrillShapeConfig> _drillShapeConfigs = new Dictionary<string, DrillShapeConfig>();
     
+    // 钻头配置
+    private Dictionary<string, DrillBitConfig> _drillBitConfigs = new Dictionary<string, DrillBitConfig>();
+    
     // 船只初始钻头配置（按shipId分组）
     private Dictionary<string, List<ShipInitialDrillConfig>> _shipInitialDrillConfigs = new Dictionary<string, List<ShipInitialDrillConfig>>();
 
@@ -73,6 +76,7 @@ public class ConfigManager : MonoBehaviour
         LoadEnergyThresholdConfigs();
         LoadTileHardnessColorConfigs();
         LoadDrillShapeConfigs();
+        LoadDrillBitConfigs();
         LoadShipInitialDrillConfigs();
 
         _isLoaded = true;
@@ -583,7 +587,133 @@ public class ConfigManager : MonoBehaviour
             }
         }
 
+        // 转换插槽配置
+        if (jsonConfig.slots != null)
+        {
+            foreach (var slotJson in jsonConfig.slots)
+            {
+                if (slotJson != null)
+                {
+                    DrillSlotType slotType;
+                    if (System.Enum.TryParse<DrillSlotType>(slotJson.slotType, out slotType))
+                    {
+                        config.slots.Add(new DrillSlotConfig
+                        {
+                            position = new Vector2Int(slotJson.position.x, slotJson.position.y),
+                            slotType = slotType,
+                            slotId = slotJson.slotId
+                        });
+                    }
+                }
+            }
+        }
+
         return config;
+    }
+
+    /// <summary>
+    /// 加载钻头配置
+    /// </summary>
+    public void LoadDrillBitConfigs()
+    {
+        TextAsset textAsset = Resources.Load<TextAsset>("Configs/DrillBitConfigs");
+        if (textAsset == null)
+        {
+            Debug.LogWarning("无法加载钻头配置: Configs/DrillBitConfigs，使用空配置");
+            return;
+        }
+
+        try
+        {
+            DrillBitConfigCollectionJson jsonCollection = JsonUtility.FromJson<DrillBitConfigCollectionJson>(textAsset.text);
+            _drillBitConfigs.Clear();
+
+            if (jsonCollection != null && jsonCollection.bits != null)
+            {
+                foreach (var jsonBit in jsonCollection.bits)
+                {
+                    DrillBitConfig config = ConvertBitFromJson(jsonBit);
+                    _drillBitConfigs[config.bitId] = config;
+                }
+            }
+
+            Debug.Log($"成功加载 {_drillBitConfigs.Count} 个钻头配置");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"解析钻头配置失败: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 从JSON格式转换为DrillBitConfig
+    /// </summary>
+    private DrillBitConfig ConvertBitFromJson(DrillBitConfigJson jsonConfig)
+    {
+        DrillSlotType requiredSlotType;
+        if (!System.Enum.TryParse<DrillSlotType>(jsonConfig.requiredSlotType, out requiredSlotType))
+        {
+            requiredSlotType = DrillSlotType.Single; // 默认值
+        }
+
+        DrillBitConfig config = new DrillBitConfig
+        {
+            bitId = jsonConfig.bitId,
+            bitName = jsonConfig.bitName,
+            description = jsonConfig.description,
+            requiredSlotType = requiredSlotType,
+            strengthBonus = jsonConfig.strengthBonus,
+            strengthMultiplier = jsonConfig.strengthMultiplier > 0 ? jsonConfig.strengthMultiplier : 1f,
+            effectRange = jsonConfig.effectRange > 0 ? jsonConfig.effectRange : 1,
+            includeDiagonal = jsonConfig.includeDiagonal,
+            iconPath = jsonConfig.iconPath,
+            effects = new List<DrillBitEffect>()
+        };
+
+        // 转换后效配置
+        if (jsonConfig.effects != null)
+        {
+            foreach (var effectJson in jsonConfig.effects)
+            {
+                if (effectJson != null)
+                {
+                    DrillBitEffectType effectType;
+                    if (System.Enum.TryParse<DrillBitEffectType>(effectJson.effectType, out effectType))
+                    {
+                        config.effects.Add(new DrillBitEffect
+                        {
+                            effectType = effectType,
+                            value = effectJson.value,
+                            range = effectJson.range > 0 ? effectJson.range : 1,
+                            description = effectJson.description
+                        });
+                    }
+                }
+            }
+        }
+
+        return config;
+    }
+
+    /// <summary>
+    /// 获取钻头配置
+    /// </summary>
+    public DrillBitConfig GetDrillBitConfig(string bitId)
+    {
+        if (_drillBitConfigs.TryGetValue(bitId, out DrillBitConfig config))
+        {
+            return config;
+        }
+        Debug.LogWarning($"未找到钻头配置: {bitId}");
+        return null;
+    }
+
+    /// <summary>
+    /// 获取所有钻头配置
+    /// </summary>
+    public List<DrillBitConfig> GetAllDrillBitConfigs()
+    {
+        return _drillBitConfigs.Values.ToList();
     }
 
     /// <summary>
@@ -658,6 +788,45 @@ public class DrillShapeConfigJson
     public int baseAttackStrength;
     public List<CellPositionJson> cells;  // 使用可序列化的列表代替 int[][]
     public List<ShapeTraitConfigJson> traits;
+    public List<DrillSlotConfigJson> slots;  // 插槽配置
+    public string description;
+}
+
+[System.Serializable]
+public class DrillSlotConfigJson
+{
+    public CellPositionJson position;
+    public string slotType;  // "Single" 或 "Quad"
+    public string slotId;
+}
+
+[System.Serializable]
+public class DrillBitConfigCollectionJson
+{
+    public List<DrillBitConfigJson> bits;
+}
+
+[System.Serializable]
+public class DrillBitConfigJson
+{
+    public string bitId;
+    public string bitName;
+    public string description;
+    public string requiredSlotType;  // "Single" 或 "Quad"
+    public int strengthBonus;
+    public float strengthMultiplier;
+    public int effectRange;
+    public bool includeDiagonal;
+    public List<DrillBitEffectJson> effects;
+    public string iconPath;
+}
+
+[System.Serializable]
+public class DrillBitEffectJson
+{
+    public string effectType;  // "Explosion", "ChainReaction", "AreaBoost"
+    public int value;
+    public int range;
     public string description;
 }
 

@@ -95,22 +95,74 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             return;
         }
 
+        // #region agent log
+        try
+        {
+            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H1,H2,H3\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Found cells count\",\"data\":{\"totalCells\":" + cells.Length + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+        }
+        catch { }
+        // #endregion
+
         foreach (var cell in cells)
         {
             if (cell == null) continue;
 
+            // 跳过FogMaskContainer及其子节点（防止FogMaskContainer挤占格子位置）
+            bool isFogMaskRelated = false;
+            Transform cellTransform = cell.transform;
+            while (cellTransform != null && cellTransform != gridContainer)
+            {
+                if (cellTransform.name == "FogMaskContainer" || cellTransform.name.Contains("FogTile_"))
+                {
+                    Debug.LogWarning($"DrillPlatformView: 跳过FogMaskContainer相关节点: {cell.gameObject.name}");
+                    isFogMaskRelated = true;
+                    break;
+                }
+                cellTransform = cellTransform.parent;
+            }
+            if (isFogMaskRelated)
+            {
+                continue; // 跳过FogMaskContainer相关节点
+            }
+
             Vector2Int pos = cell.GridPosition;
+
+            // #region agent log
+            try
+            {
+                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H1,H2,H3\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Processing cell\",\"data\":{\"x\":" + pos.x + ",\"y\":" + pos.y + ",\"name\":\"" + (cell.gameObject != null ? cell.gameObject.name : "null") + "\",\"active\":" + (cell.gameObject != null ? cell.gameObject.activeSelf.ToString().ToLower() : "null") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+            }
+            catch { }
+            // #endregion
 
             // 坐标范围校验
             if (pos.x < 0 || pos.x >= DrillPlatformData.PLATFORM_SIZE ||
                 pos.y < 0 || pos.y >= DrillPlatformData.PLATFORM_SIZE)
             {
+                // #region agent log
+                try
+                {
+                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H1\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Cell out of bounds\",\"data\":{\"x\":" + pos.x + ",\"y\":" + pos.y + ",\"name\":\"" + (cell.gameObject != null ? cell.gameObject.name : "null") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                    System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+                }
+                catch { }
+                // #endregion
                 Debug.LogError($"DrillPlatformView: DrillPlatformCell 坐标越界 ({pos.x},{pos.y})，节点：{cell.gameObject.name}");
                 continue;
             }
 
             if (_cellObjects.ContainsKey(pos))
             {
+                // #region agent log
+                try
+                {
+                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H2\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Duplicate cell coordinate\",\"data\":{\"x\":" + pos.x + ",\"y\":" + pos.y + ",\"name\":\"" + (cell.gameObject != null ? cell.gameObject.name : "null") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                    System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+                }
+                catch { }
+                // #endregion
                 Debug.LogError($"DrillPlatformView: 检测到重复的格子坐标 ({pos.x},{pos.y})，节点：{cell.gameObject.name}");
                 continue;
             }
@@ -169,7 +221,25 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             trigger.triggers.Add(exitEntry);
 
             _cellObjects[pos] = cellObj;
+
+            // #region agent log
+            try
+            {
+                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H3\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Cell added to dictionary\",\"data\":{\"x\":" + pos.x + ",\"y\":" + pos.y + ",\"dictSize\":" + _cellObjects.Count + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+            }
+            catch { }
+            // #endregion
         }
+
+        // #region agent log
+        try
+        {
+            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H3\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Init complete, final dict size\",\"data\":{\"dictSize\":" + _cellObjects.Count + ",\"has0_8\":" + _cellObjects.ContainsKey(new Vector2Int(0, 8)).ToString().ToLower() + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+        }
+        catch { }
+        // #endregion
 
         Refresh();
     }
@@ -192,10 +262,31 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         HashSet<Vector2Int> occupiedCells = _platformManager.GetAllOccupiedCells();
         HashSet<Vector2Int> highlightedCells = GetHighlightedCells();
 
+        // #region agent log
+        try
+        {
+            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H4\",\"location\":\"DrillPlatformView.Refresh\",\"message\":\"Refresh start\",\"data\":{\"cellObjectsCount\":" + _cellObjects.Count + ",\"occupiedCellsCount\":" + occupiedCells.Count + ",\"has0_8\":" + _cellObjects.ContainsKey(new Vector2Int(0, 8)).ToString().ToLower() + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+        }
+        catch { }
+        // #endregion
+
         foreach (var kvp in _cellObjects)
         {
             Vector2Int pos = kvp.Key;
             GameObject cellObj = kvp.Value;
+            
+            // #region agent log
+            if (pos.x == 0 && pos.y == 8)
+            {
+                try
+                {
+                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H4\",\"location\":\"DrillPlatformView.Refresh\",\"message\":\"Processing cell 0,8\",\"data\":{\"cellObjNull\":" + (cellObj == null ? "true" : "false") + ",\"active\":" + (cellObj != null ? cellObj.activeSelf.ToString().ToLower() : "null") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                    System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+                }
+                catch { }
+            }
+            // #endregion
             
             if (cellObj == null) continue;
             
@@ -214,7 +305,37 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             {
                 image.color = emptyColor;
             }
+
+            // #region agent log
+            if (pos.x == 0 && pos.y == 8)
+            {
+                try
+                {
+                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H4\",\"location\":\"DrillPlatformView.Refresh\",\"message\":\"Cell 0,8 color set\",\"data\":{\"isHighlighted\":" + highlightedCells.Contains(pos).ToString().ToLower() + ",\"isOccupied\":" + occupiedCells.Contains(pos).ToString().ToLower() + ",\"color\":\"" + image.color.ToString() + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+                    System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+                }
+                catch { }
+            }
+            // #endregion
         }
+
+        // #region agent log
+        try
+        {
+            List<string> y9Cells = new List<string>();
+            foreach (KeyValuePair<Vector2Int, GameObject> kvp in _cellObjects)
+            {
+                if (kvp.Key.y == 9)
+                {
+                    y9Cells.Add("{\"x\":" + kvp.Key.x + ",\"y\":" + kvp.Key.y + "}");
+                }
+            }
+            string y9CellsJson = y9Cells.Count > 0 ? string.Join(",", y9Cells) : "";
+            string log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H5\",\"location\":\"DrillPlatformView.Refresh\",\"message\":\"Checking for Y=9 cells\",\"data\":{\"y9Cells\":[" + y9CellsJson + "]},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
+            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+        }
+        catch { }
+        // #endregion
     }
 
     /// <summary>

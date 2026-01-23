@@ -763,6 +763,166 @@ public enum UpgradeType
 
 每个被造型覆盖的格子都会对对应位置的矿石造成该格子的最终攻击强度伤害。
 
+#### 3.11.9 钻头插槽系统
+
+钻机平台（造型）可以配置钻头插槽，用于插入钻头道具，增强钻探能力。
+
+```csharp
+/// <summary>
+/// 钻头插槽配置（在造型配置中定义）
+/// </summary>
+[Serializable]
+public class DrillSlotConfig
+{
+    public Vector2Int position;        // 插槽在造型中的相对位置（相对于锚点）
+    public DrillSlotType slotType;     // 插槽类型（1格、4格等）
+    public string slotId;              // 插槽唯一ID（可选）
+}
+
+public enum DrillSlotType
+{
+    Single,      // 1格插槽
+    Quad,        // 4格插槽（2x2）
+}
+
+/// <summary>
+/// 已放置的插槽实例（在平台上）
+/// </summary>
+[Serializable]
+public class PlacedDrillSlot
+{
+    public string slotId;               // 插槽唯一ID
+    public Vector2Int platformPosition; // 在9x9平台上的绝对位置
+    public DrillSlotType slotType;     // 插槽类型
+    public string insertedBitId;       // 插入的钻头ID（如果为空则表示未插入）
+    public string shapeInstanceId;     // 所属造型实例ID
+}
+```
+
+#### 3.11.10 钻头道具系统
+
+钻头是独立的道具系统，可以插入到钻机平台的插槽中，影响周围格子的钻探强度和后效。
+
+```csharp
+/// <summary>
+/// 钻头配置（从配置表加载）
+/// </summary>
+[Serializable]
+public class DrillBitConfig
+{
+    public string bitId;                    // 钻头唯一ID
+    public string bitName;                   // 钻头名称
+    public string description;               // 描述
+    public DrillSlotType requiredSlotType;   // 需要的插槽类型（1格或4格）
+    
+    // 属性加成
+    public int strengthBonus;                // 钻探强度加成（固定值）
+    public float strengthMultiplier;          // 钻探强度倍率（如1.2表示+20%）
+    
+    // 影响范围
+    public int effectRange;                  // 影响范围（格子数，如1表示相邻格子）
+    public bool includeDiagonal;             // 是否包括斜角
+    
+    // 后效效果
+    public List<DrillBitEffect> effects;     // 后效列表（如爆炸、连锁等）
+    public string iconPath;                   // 图标路径
+}
+
+/// <summary>
+/// 钻头后效配置
+/// </summary>
+[Serializable]
+public class DrillBitEffect
+{
+    public DrillBitEffectType effectType;    // 效果类型
+    public int value;                        // 效果数值
+    public int range;                        // 影响范围
+    public string description;               // 效果描述
+}
+
+public enum DrillBitEffectType
+{
+    Explosion,           // 爆炸：挖掉矿石时对周围造成伤害
+    ChainReaction,       // 连锁反应
+    AreaBoost,           // 区域加成
+}
+
+/// <summary>
+/// 已插入的钻头实例
+/// </summary>
+[Serializable]
+public class PlacedDrillBit
+{
+    public string bitId;                     // 钻头配置ID
+    public string slotId;                    // 插入的插槽ID
+    public Vector2Int platformPosition;      // 在平台上的位置
+    public string instanceId;                // 实例唯一ID
+}
+```
+
+#### 3.11.11 钻机平台数据扩展
+
+`DrillPlatformData` 扩展支持插槽和钻头管理：
+
+```csharp
+[Serializable]
+public class DrillPlatformData
+{
+    // ... 现有字段 ...
+    
+    /// <summary>
+    /// 已放置的插槽列表（从已放置的造型中提取）
+    /// </summary>
+    public List<PlacedDrillSlot> placedSlots = new List<PlacedDrillSlot>();
+    
+    /// <summary>
+    /// 已插入的钻头列表
+    /// </summary>
+    public List<PlacedDrillBit> insertedBits = new List<PlacedDrillBit>();
+}
+```
+
+#### 3.11.12 造型配置扩展
+
+`DrillShapeConfig` 扩展支持插槽配置：
+
+```csharp
+[Serializable]
+public class DrillShapeConfig
+{
+    // ... 现有字段 ...
+    
+    /// <summary>
+    /// 该造型上的钻头插槽配置列表
+    /// </summary>
+    public List<DrillSlotConfig> slots = new List<DrillSlotConfig>();
+}
+```
+
+#### 3.11.13 攻击强度计算（含钻头加成）
+
+考虑钻头加成后的攻击强度计算公式：
+
+```
+最终攻击强度 = ((基础攻击强度 + 钻头固定加成) × 造型特性倍率 × 永久倍率 + 永久固定加成) × 钻头倍率
+```
+
+其中：
+- 基础攻击强度：来自造型配置的 `baseAttackStrength`
+- 钻头固定加成：所有影响该格子的钻头的 `strengthBonus` 之和
+- 钻头倍率：所有影响该格子的钻头的 `strengthMultiplier` 之积
+- 影响范围：钻头以自己为中心，影响 `effectRange` 范围内的格子（可能包括斜角）
+
+#### 3.11.14 钻头后效系统
+
+当矿石被完全挖掉时，触发插入在该位置影响范围内的钻头的后效：
+
+- **爆炸效果**：对周围 `range` 范围内的矿石造成 `value` 点伤害
+- **连锁反应**：当挖掉矿石时，如果周围有相同类型的矿石，也对它们造成伤害
+- **区域加成**：持续效果，不需要在挖掉时触发
+
+后效伤害会立即应用到地图上，可能触发连锁挖掉更多矿石（但不会再次触发后效，避免无限循环）。
+
 ### 3.15 租船和债务系统数据结构
 
 ```csharp
@@ -945,7 +1105,9 @@ public enum UpgradeOptionType
     MiningEfficiency,   // 挖掘效率提升
     OreDiscovery,       // 矿石发现能力提升
     OreValueBoost,      // 矿石价值提升
-    DrillShapeUnlock    // 解锁钻头造型（将指定造型加入当前关卡可用库存）
+    DrillShapeUnlock,   // 解锁钻头造型（将指定造型加入当前关卡可用库存）
+    DrillPlatformUpgrade,  // 钻机平台升级（提升基础强度或增加插槽）
+    DrillBitUnlock      // 解锁新钻头
 }
 ```
 
@@ -2855,6 +3017,29 @@ UI系统
      - 攻击范围计算：以钻头中心为基准，计算矩形攻击区域（minX, maxX, minY, maxY）
      - 高亮更新：地图更新时自动刷新高亮状态，钻头范围变化时也会自动更新
      - 高亮配置：可通过MiningMapView组件的Inspector配置高亮颜色、变暗透明度、是否启用高亮
+  - **挖矿地图迷雾遮罩规则**：
+     - 在挖矿地图上显示黑色迷雾遮罩，从地图边缘向中心扩展
+     - 迷雾效果：使用黑色半透明遮罩覆盖未探索区域，营造探索感
+     - 实现方式：使用自定义Shader（UI/FogMask）实现，单个Image组件 + Material，性能更好，效果更平滑
+     - 无迷雾区域：钻头格子及其周围一定半径内的格子完全无迷雾（alpha = 0）
+     - 渐变效果：从无迷雾区域向外，根据到最近钻头格子的距离线性增加迷雾透明度
+     - 距离计算：在Shader的Fragment Shader中，将UV坐标转换为网格坐标，遍历附近格子（搜索半径 = revealRadius + fadeDistance），通过采样攻击范围纹理（_AttackRangeTex）找到所有钻头格子，计算当前像素到最近钻头格子的欧几里得距离
+     - 最近钻头格子搜索算法：
+       - 对于每个像素，在搜索半径内遍历附近的所有格子
+       - 对每个格子采样攻击范围纹理，如果值>0.5则表示是钻头格子
+       - 计算到所有钻头格子的距离，取最小值作为最终距离
+       - 搜索范围限制在ceil(revealRadius + fadeDistance)内，避免全图遍历，优化性能
+     - 透明度算法（在Shader中计算）：
+       - 如果当前像素在攻击范围内（通过纹理采样判断）：alpha = 0（完全透明，无迷雾）
+       - 如果到最近钻头格子的距离 <= revealRadius：alpha = 0（完全透明，无迷雾）
+       - 如果距离 > revealRadius + fadeDistance：alpha = maxFogAlpha（完全迷雾）
+       - 否则：alpha = (distance - revealRadius) / fadeDistance * maxFogAlpha（线性插值）
+     - 攻击范围处理：使用Texture2D（9x9）存储攻击范围掩码，传递给Shader，Shader中采样纹理判断当前像素是否在攻击范围内，并用于查找最近的钻头格子
+     - 更新机制：实时更新，当钻头位置或攻击范围变化时立即刷新Material参数和攻击范围纹理
+     - 更新时机：地图更新时（UpdateMap调用时）、钻头位置变化时、攻击范围变化时
+     - 配置参数：可通过FogMaskView组件的Inspector配置迷雾颜色、最大透明度、无迷雾半径（revealRadius）、渐变距离（fadeDistance）等
+     - UI层级：FogMaskContainer作为MiningMapContainer的子对象，遮罩层显示在格子层之上
+     - 性能优势：从81个GameObject减少到1个，大幅降低DrawCall，Shader计算支持像素级渐变，效果更自然；搜索算法针对9x9小网格优化，搜索半径通常为5-6格，性能可接受
   - **挖矿地图颜色规则（硬度区间配置表）**：
     - 仅矿石格子使用配置表颜色映射；空/岩石格子保持原固定颜色
     - 已挖掘格子使用图片显示：`Resources/UI/Lattice/Lattice_null.png`

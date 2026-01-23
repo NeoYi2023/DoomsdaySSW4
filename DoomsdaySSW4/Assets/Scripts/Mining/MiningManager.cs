@@ -597,6 +597,22 @@ public class MiningManager : MonoBehaviour
                     {
                         result.moneyGained += ore.value;
                     }
+
+                    // 触发钻头后效
+                    DrillBitEffectManager effectManager = DrillBitEffectManager.Instance;
+                    if (effectManager != null)
+                    {
+                        List<BitEffectDamage> effectDamages = effectManager.ProcessBitEffects(
+                            pos, 
+                            layerDepth, 
+                            currentOreId);
+                        
+                        // 应用后效伤害
+                        foreach (var effectDamage in effectDamages)
+                        {
+                            ApplyBitEffectDamage(effectDamage, layer, layerDepth, result);
+                        }
+                    }
                 }
             }
             else
@@ -612,6 +628,83 @@ public class MiningManager : MonoBehaviour
         }
         
         return result;
+    }
+
+    /// <summary>
+    /// 应用钻头后效伤害
+    /// </summary>
+    private void ApplyBitEffectDamage(BitEffectDamage effectDamage, MiningLayerData layer, int layerDepth, MiningResult result)
+    {
+        Vector2Int pos = effectDamage.position;
+
+        // 检查位置是否在地图范围内
+        if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
+            return;
+
+        MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
+        if (tile == null || tile.tileType != TileType.Ore || tile.isMined)
+            return;
+
+        // 应用伤害
+        tile.hardness -= effectDamage.damage;
+
+        // 获取矿石配置
+        OreConfig oreConfig = _configManager.GetOreConfig(GetOreIdFromMineralType(tile.mineralType));
+        string oreId = oreConfig?.oreId ?? "";
+        int oreValue = oreConfig?.value ?? 0;
+
+        // 判断是否完全挖掉
+        bool isFullyMined = tile.hardness <= 0;
+
+        // 记录被攻击的格子信息（用于动效）
+        result.attackedTiles.Add(new AttackedTileInfo
+        {
+            position = pos,
+            attackStrength = effectDamage.damage,
+            isFullyMined = isFullyMined,
+            remainingHardness = Mathf.Max(0, tile.hardness),
+            oreId = oreId,
+            moneyValue = isFullyMined ? oreValue : 0
+        });
+
+        // 如果硬度归零，挖掉矿石
+        if (isFullyMined)
+        {
+            OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
+            if (ore != null)
+            {
+                tile.isMined = true;
+                ore.isMined = true;
+                result.minedOres.Add(ore);
+
+                // 累计矿物
+                if (!_miningData.minerals.ContainsKey(ore.mineralType))
+                    _miningData.minerals[ore.mineralType] = 0;
+                _miningData.minerals[ore.mineralType]++;
+
+                // 累计金钱和能源
+                if (ore.isEnergyOre)
+                {
+                    result.energyGained += ore.energyValue;
+                }
+                else
+                {
+                    result.moneyGained += ore.value;
+                }
+
+                // 注意：后效挖掉的矿石不会再次触发后效，避免无限循环
+            }
+        }
+        else
+        {
+            // 部分受损的矿石
+            OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
+            if (ore != null)
+            {
+                ore.currentHardness = tile.hardness;
+                result.partiallyDamagedOres.Add(ore);
+            }
+        }
     }
 
     /// <summary>
