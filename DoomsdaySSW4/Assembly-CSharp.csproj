@@ -77,9 +77,11 @@
     <Compile Include="Assets\Scripts\Debt\DebtManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexShakeA.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark04.cs" />
+    <Compile Include="Assets\Scripts\Data\Models\PlacedDrillSlot.cs" />
     <Compile Include="Assets\Scripts\UI\Components\FontHelper.cs" />
     <Compile Include="Assets\Scripts\UI\Components\ShapeInventoryItem.cs" />
     <Compile Include="Assets\Scripts\Data\Models\EnergyData.cs" />
+    <Compile Include="Assets\Scripts\Data\Models\DrillSlotConfig.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ChatController.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TextMeshProFloatingText.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexShakeB.cs" />
@@ -90,6 +92,7 @@
     <Compile Include="Assets\Scripts\UI\Screens\DrillEditorScreen.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\CameraController.cs" />
     <Compile Include="Assets\Scripts\Data\Models\ShipConfig.cs" />
+    <Compile Include="Assets\Scripts\Drill\DrillBitEffectManager.cs" />
     <Compile Include="Assets\Scripts\Config\ConfigManager.cs" />
     <Compile Include="Assets\Scripts\Energy\EnergyUpgradeManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMPro_InstructionOverlay.cs" />
@@ -99,12 +102,14 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ObjectSpin.cs" />
     <Compile Include="Assets\Scripts\Data\Models\MiningData.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextInfoDebugTool.cs" />
+    <Compile Include="Assets\Scripts\Data\Models\DrillBitConfig.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextEventCheck.cs" />
     <Compile Include="Assets\Scripts\Mining\MiningManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ShaderPropAnimator.cs" />
     <Compile Include="Assets\Scripts\Data\Models\TaskData.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\WarpTextExample.cs" />
     <Compile Include="Assets\Scripts\Task\TaskManager.cs" />
+    <Compile Include="Assets\Scripts\Data\Models\PlacedDrillBit.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_DigitValidator.cs" />
     <Compile Include="Assets\Scripts\UI\Screens\UpgradeSelectionScreen.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark02.cs" />
@@ -119,6 +124,7 @@
     <Compile Include="Assets\Scripts\Data\Models\DebtData.cs" />
     <Compile Include="Assets\Scripts\UI\Components\DrillPlatformCell.cs" />
     <Compile Include="Assets\Scripts\UI\Components\ResourceDisplay.cs" />
+    <Compile Include="Assets\Scripts\Drill\DrillBitManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexJitter.cs" />
     <Compile Include="Assets\Scripts\UI\Effects\MiningEffectsManager.cs" />
     <Compile Include="Assets\Scripts\UI\Components\FontDiagnostics.cs" />
