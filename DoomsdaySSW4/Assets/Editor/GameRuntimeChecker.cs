@@ -233,9 +233,12 @@ public class GameRuntimeChecker : EditorWindow
                     issues.Add("MiningMapContainer缺少MiningMapView组件");
                 }
                 
-                if (miningContainer.GetComponent<GridLayoutGroup>() == null)
+                // 允许使用 GridLayoutGroup 或 HexLayoutGroup 作为挖矿格子容器的布局组件
+                bool hasGridLayout = miningContainer.GetComponent<GridLayoutGroup>() != null;
+                bool hasHexLayout = miningContainer.GetComponent<HexLayoutGroup>() != null;
+                if (!hasGridLayout && !hasHexLayout)
                 {
-                    issues.Add("MiningMapContainer缺少GridLayoutGroup组件");
+                    issues.Add("MiningMapContainer缺少布局组件（需要 GridLayoutGroup 或 HexLayoutGroup 之一）");
                 }
             }
         }

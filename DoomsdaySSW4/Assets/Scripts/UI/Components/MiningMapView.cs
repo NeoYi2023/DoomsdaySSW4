@@ -55,6 +55,9 @@ public class MiningMapView : MonoBehaviour
     
     [Header("迷雾遮罩设置")]
     [SerializeField] private FogMaskView fogMaskView; // 迷雾遮罩视图引用（可选，如果为空则自动查找）
+
+    [Header("六边形布局设置")]
+    [SerializeField] private bool useHexLayout = true; // 是否使用平顶六边形视觉布局
     
     private readonly Color _defaultOreColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
     
@@ -92,7 +95,7 @@ public class MiningMapView : MonoBehaviour
             }
         }
 
-        // 配置GridLayout基本设置
+        // 配置GridLayout基本设置（仅在未启用六边形布局时生效）
         if (gridLayout != null)
         {
             gridLayout.spacing = spacing;
@@ -103,6 +106,12 @@ public class MiningMapView : MonoBehaviour
             if (!autoResize)
             {
                 gridLayout.cellSize = new Vector2(60, 60);
+            }
+
+            // 六边形布局下由脚本手动控制格子位置，关闭 GridLayout 自动排布
+            if (useHexLayout)
+            {
+                gridLayout.enabled = false;
             }
         }
     }
@@ -130,26 +139,16 @@ public class MiningMapView : MonoBehaviour
     /// </summary>
     private void InitializeFogMaskView()
     {
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"InitializeFogMaskView entry\",\"data\":{{\"fogMaskViewBefore\":{fogMaskView != null}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-        // #endregion
         // 如果未在Inspector中指定，尝试自动查找
         if (fogMaskView == null)
         {
             // 在子对象中查找FogMaskView
             fogMaskView = GetComponentInChildren<FogMaskView>();
             
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"After GetComponentInChildren\",\"data\":{{\"fogMaskViewFound\":{fogMaskView != null}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-            // #endregion
-            
             // 如果还是找不到，尝试在父对象的子对象中查找
             if (fogMaskView == null && transform.parent != null)
             {
                 fogMaskView = transform.parent.GetComponentInChildren<FogMaskView>();
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"After parent search\",\"data\":{{\"fogMaskViewFound\":{fogMaskView != null}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-                // #endregion
             }
         }
         
@@ -157,15 +156,6 @@ public class MiningMapView : MonoBehaviour
         if (fogMaskView != null && gridLayout != null)
         {
             fogMaskView.SyncLayoutWithMiningMap(gridLayout);
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"FogMaskView found and synced\",\"data\":{{}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-            // #endregion
-        }
-        else
-        {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:InitializeFogMaskView\",\"message\":\"FogMaskView not found or gridLayout null\",\"data\":{{\"fogMaskViewNull\":{fogMaskView == null},\"gridLayoutNull\":{gridLayout == null}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-            // #endregion
         }
     }
 
@@ -183,11 +173,6 @@ public class MiningMapView : MonoBehaviour
     /// </summary>
     private void CalculateCellSize()
     {
-        if (gridLayout == null)
-        {
-            return;
-        }
-
         RectTransform targetRect = null;
         
         // 决定使用哪个RectTransform的大小
@@ -219,41 +204,48 @@ public class MiningMapView : MonoBehaviour
         float availableWidth = containerWidth - paddingHorizontal;
         float availableHeight = containerHeight - paddingVertical;
 
-        // 计算需要的间距
         int columns = MiningManager.LAYER_WIDTH; // 9列
-        int rows = MiningManager.LAYER_HEIGHT; // 9行
-        
-        float spacingWidth = spacing.x * (columns - 1);
-        float spacingHeight = spacing.y * (rows - 1);
+        int rows = MiningManager.LAYER_HEIGHT;   // 9行
 
         // 计算每个格子的大小
-        // 公式：可用空间 = 格子数量 * 格子大小 + 间距总宽度
-        // 因此：格子大小 = (可用空间 - 间距总宽度) / 格子数量
-        float cellWidth = (availableWidth - spacingWidth) / columns;
-        float cellHeight = (availableHeight - spacingHeight) / rows;
+        float cellWidth;
+        float cellHeight;
 
-        // 确保大小为正数且合理
-        if (cellWidth > 0 && cellHeight > 0)
+        if (!useHexLayout)
         {
-            gridLayout.cellSize = new Vector2(cellWidth, cellHeight);
-            
-            // 同步迷雾遮罩的布局
-            if (fogMaskView != null)
-            {
-                fogMaskView.SyncLayoutWithMiningMap(gridLayout);
-            }
+            // 原有矩形网格计算：考虑间距
+            float spacingWidth = spacing.x * (columns - 1);
+            float spacingHeight = spacing.y * (rows - 1);
+            cellWidth = (availableWidth - spacingWidth) / columns;
+            cellHeight = (availableHeight - spacingHeight) / rows;
         }
         else
         {
-            // 如果计算失败，使用默认值
+            // 六边形布局：根据蜂窝整体宽高反推单个格子的宽高
+            // 水平方向近似长度： (columns - 1) * 0.75w + w  ≈ (columns * 0.75 + 0.25) * w
+            // 竖直方向近似高度： (rows - 1) * 0.866h + h  ≈ (rows * 0.866 + 0.134) * h
+            float effectiveCols = columns * 0.75f + 0.25f;
+            float effectiveRows = rows * 0.866f + 0.134f;
+
+            cellWidth = availableWidth / Mathf.Max(effectiveCols, 1f);
+            cellHeight = availableHeight / Mathf.Max(effectiveRows, 1f);
+        }
+
+        // 确保大小为正数且合理
+        if (cellWidth > 0 && cellHeight > 0 && gridLayout != null)
+        {
+            gridLayout.cellSize = new Vector2(cellWidth, cellHeight);
+        }
+        else if (gridLayout != null)
+        {
             Debug.LogWarning($"MiningMapView: 无法计算自适应格子大小（容器大小: {containerWidth}x{containerHeight}），使用默认值60x60");
             gridLayout.cellSize = new Vector2(60, 60);
-            
-            // 同步迷雾遮罩的布局
-            if (fogMaskView != null)
-            {
-                fogMaskView.SyncLayoutWithMiningMap(gridLayout);
-            }
+        }
+
+        // 同步迷雾遮罩的布局（FogMaskView 内部可以继续使用 GridLayout 约束）
+        if (fogMaskView != null && gridLayout != null)
+        {
+            fogMaskView.SyncLayoutWithMiningMap(gridLayout);
         }
     }
 
@@ -339,18 +331,9 @@ public class MiningMapView : MonoBehaviour
         }
         
         // 更新迷雾遮罩
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:UpdateMap\",\"message\":\"Before fogMaskView update\",\"data\":{{\"fogMaskViewNull\":{fogMaskView == null},\"layerDepth\":{layerDepth}}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-        // #endregion
         if (fogMaskView != null)
         {
             fogMaskView.UpdateFog(layerDepth);
-        }
-        else
-        {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MiningMapView.cs:UpdateMap\",\"message\":\"fogMaskView is null, UpdateFog not called\",\"data\":{{}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-            // #endregion
         }
     }
 
@@ -363,13 +346,15 @@ public class MiningMapView : MonoBehaviour
 
         if (tilePrefab != null)
         {
-            tileObj = Instantiate(tilePrefab, gridLayout.transform);
+            Transform parent = gridLayout != null ? gridLayout.transform : transform;
+            tileObj = Instantiate(tilePrefab, parent);
         }
         else
         {
             // 动态创建瓦片
+            Transform parent = gridLayout != null ? gridLayout.transform : transform;
             tileObj = new GameObject($"Tile_{x}_{y}");
-            tileObj.transform.SetParent(gridLayout.transform, false);
+            tileObj.transform.SetParent(parent, false);
 
             // 添加Image组件
             Image image = tileObj.AddComponent<Image>();
@@ -441,6 +426,12 @@ public class MiningMapView : MonoBehaviour
 
         // 更新瓦片显示（这会存储基础颜色）
         UpdateTileVisual(tileObj, tileData);
+
+        // 如果启用六边形布局，手动设置瓦片的局部坐标
+        if (useHexLayout)
+        {
+            PositionTileAsHex(tileObj, x, y);
+        }
     }
 
     /// <summary>
@@ -506,6 +497,54 @@ public class MiningMapView : MonoBehaviour
                 text.text = "";
             }
         }
+    }
+
+    /// <summary>
+    /// 将瓦片按平顶六边形布局定位（odd-r offset）
+    /// </summary>
+    private void PositionTileAsHex(GameObject tileObj, int x, int y)
+    {
+        if (_containerRectTransform == null || gridLayout == null || tileObj == null)
+        {
+            return;
+        }
+
+        RectTransform rect = tileObj.GetComponent<RectTransform>();
+        if (rect == null)
+        {
+            return;
+        }
+
+        // 使用容器自身作为坐标系中心，anchor 设为中心，pivot 为中心
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+
+        Rect containerRect = _containerRectTransform.rect;
+        float w = gridLayout.cellSize.x;
+        float h = gridLayout.cellSize.y;
+
+        // 平顶六边形 odd-r 布局：奇数行在水平方向右移半个单元
+        float horizontalStep = 0.75f * w;
+        float verticalStep = 0.866f * h; // 约等于 sqrt(3)/2
+
+        float offsetXPerRow = (y % 2 == 0) ? 0f : 0.5f * w;
+
+        // 以容器中心为 (0,0)，向右为正 x，向上为正 y（注意 UI 坐标 y 向上为正，但 anchoredPosition.y 向上为正）
+        float logicalX = x * horizontalStep + offsetXPerRow;
+        float logicalY = -y * verticalStep; // 向下排列
+
+        // 将原点平移到容器中心附近，使整张 9×9 地图居中
+        float mapWidth = (MiningManager.LAYER_WIDTH - 1) * horizontalStep + w;
+        float mapHeight = (MiningManager.LAYER_HEIGHT - 1) * verticalStep + h;
+
+        float originX = -mapWidth / 2f + w / 2f;
+        float originY = mapHeight / 2f - h / 2f;
+
+        float finalX = originX + logicalX;
+        float finalY = originY + logicalY;
+
+        rect.anchoredPosition = new Vector2(finalX, finalY);
     }
 
     /// <summary>

@@ -166,16 +166,7 @@ public class DebtManager : MonoBehaviour
             return;
         }
 
-        // #region agent log
-        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"DebtManager.cs:162\",\"message\":\"AddDebt called\",\"data\":{\"amount\":" + amount + ",\"oldTotalDebt\":" + _debtData.totalDebt + ",\"oldPaidDebt\":" + _debtData.paidDebt + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
-        // #endregion
-
         _debtData.totalDebt += amount;
-
-        // #region agent log
-        System.IO.File.AppendAllText(@"f:\CursorGame_Git\DoomsdaySSW4\.cursor\debug.log", "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"DebtManager.cs:168\",\"message\":\"After AddDebt\",\"data\":{\"newTotalDebt\":" + _debtData.totalDebt + ",\"remainingDebt\":" + _debtData.RemainingDebt + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}\n");
-        // #endregion
-
         Debug.Log($"债务增加 {amount}，总债务: {_debtData.totalDebt}，剩余债务: {_debtData.RemainingDebt}");
     }
 }

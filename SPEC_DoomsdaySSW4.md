@@ -2858,7 +2858,34 @@ UI系统
   - **静态格子设计**：
     - `DrillEditorPanel/PlatformGrid` 下预先放置 81 个格子子节点，每个子节点代表 9x9 平台中的一个格子；
     - 每个格子节点都挂载轻量标记组件 `DrillPlatformCell`，内部至少包含其平台坐标信息（`x`, `y` 或 `gridPosition : Vector2Int`），坐标范围为 0~8；
-    - 允许使用 `GridLayoutGroup` 或手动调整 `RectTransform.anchoredPosition` / `sizeDelta` 以满足美术布局，只要 81 个格子坐标准确覆盖 9x9 全平台即可。
+    - 推荐使用自定义 UI 布局组件 `HexLayoutGroup` 进行正六边形（蜂窝状）排布，也允许继续使用 `GridLayoutGroup` 或手动调整 `RectTransform.anchoredPosition` / `sizeDelta` 以满足美术布局，只要 81 个格子坐标准确覆盖 9x9 全平台即可。
+  - **`HexLayoutGroup` 六边形布局组件（UI）**：
+    - **组件用途**：
+      - 继承自 `UnityEngine.UI.LayoutGroup`，用于在 Canvas 中对子节点（`RectTransform`）进行正六边形排布，在视觉上形成蜂窝状棋盘；
+      - 可作为 `GridLayoutGroup` 的替代方案应用于 `PlatformGrid`、挖矿地图容器等需要六边形布局的 UI 容器。
+    - **关键配置字段（Inspector）**：
+      - `cellSize : Vector2`：单个六边形格子的逻辑宽高（包围盒尺寸）；
+      - `spacing : Vector2`：格子间的额外间距；
+      - `orientation : HexOrientation`（枚举：`PointyTop`, `FlatTop`）：六边形方向，挖矿地图默认使用 `FlatTop`（平顶）；
+      - `staggerAxis : HexStaggerAxis`（枚举：`Row`, `Column`）：错列轴（Pointy-top 一般按 `Column` 错列，Flat-top 一般按 `Row` 错列）；
+      - `staggerIndex : HexStaggerIndex`（枚举：`Even`, `Odd`）：从偶数行/列开始错列，控制整体对齐风格；
+      - `constraintCount : int`：一行/一列中的单元数量（类似 `GridLayoutGroup.constraintCount`，用于控制“宽度”或“高度”）。
+    - **排布规则（示意）**：
+      - 内部使用一维索引 `i` 按行优先转换为 `(row, col)`：
+        - `row = i / constraintCount`，`col = i % constraintCount`；
+      - 再根据六边形方向和错列配置计算每个子节点的 `anchoredPosition`：
+        - **平顶六边形（FlatTop，适合挖矿地图）示例**：
+          - 水平方向步长：`xStep ≈ cellSize.x * 0.75f + spacing.x`；
+          - 竖直方向步长：`yStep ≈ cellSize.y * 0.866f + spacing.y`；
+          - 奇偶行错列（odd-r offset）：若 `row` 为奇数，则在 X 轴上再偏移约 `cellSize.x * 0.5f`；
+        - **尖顶六边形（PointyTop）示例**：
+          - 水平方向步长：`xStep ≈ cellSize.x + spacing.x`；
+          - 竖直方向步长：`yStep ≈ cellSize.y * 0.75f + spacing.y`；
+          - 奇偶列错列（odd-q offset）：若 `col` 为奇数，则在 Y 轴上再偏移约 `cellSize.y * 0.5f`。
+      - 布局原点与整体对齐由 `LayoutGroup.childAlignment` 决定（如左上、居中等），`HexLayoutGroup` 负责在内部根据该对齐方式整体平移六边形蜂窝。
+    - **与逻辑坐标的关系**：
+      - UI 六边形布局只影响渲染坐标，不改变钻机平台与矿石系统内部的逻辑网格坐标 `(x, y)` 与存档结构；
+      - 钻机平台依然使用 9×9 的整数坐标 `[0, DrillPlatformData.PLATFORM_SIZE)` 管理格子；`HexLayoutGroup` 仅按照索引顺序将子节点排布成六边形。
   - **`DrillPlatformCell` 数据结构（UI 标记组件）**：
     - 伪代码示例：  
       ```csharp
@@ -2907,6 +2934,21 @@ UI系统
     - 若运行时报出“重复坐标”或“格子坐标越界”等日志：
       - 在 Unity 层次视图中检查 `PlatformGrid` 下格子节点的 `DrillPlatformCell.x / y` 配置是否有冲突或缺失；
       - 调整后重新运行，确保 81 个格子覆盖 `(0,0)` 到 `(8,8)` 的所有坐标。
+
+##### 7.2.1.2 HexLayoutGroup 使用示例
+
+- **在 PlatformGrid 上使用六边形排布**：
+  - 在 `PlatformGrid` 的 `RectTransform` 上添加组件 `HexLayoutGroup`；
+  - 将 81 个格子子节点（挂有 `DrillPlatformCell`）作为 `PlatformGrid` 的直接子节点；
+  - 在 `HexLayoutGroup` 中配置：  
+    - `cellSize`：例如 `(40, 40)`；  
+    - `spacing`：根据美术需求微调（例如 `(2, 2)`）；  
+    - `orientation`：如果只是钻机平台，可以使用 `PointyTop` 或 `FlatTop`，按 UI 观感选择；  
+    - `staggerAxis`：推荐 `Row`；  
+    - `staggerIndex`：根据需要选择 `Odd` 或 `Even`，用于控制哪一行先错列。
+- **与 MiningMapView 的关系**：
+  - 挖矿地图的视觉六边形布局目前由 `MiningMapView.PositionTileAsHex` 手动控制；  
+  - 若未来希望统一使用 `HexLayoutGroup`，可以将 9x9 地图容器改为使用 `HexLayoutGroup`，并删除或精简 `PositionTileAsHex` 相关逻辑。
 
 #### 7.2.4 游戏流程设计
 
@@ -3006,9 +3048,19 @@ UI系统
    - 能源矿石累计到能源值，不转化为金钱
    - 挖掘深度（层数）影响矿石类型、硬度和所需额外属性
    - **挖矿地图尺寸规则**：
-     - 每层地图固定为9列×9行的网格（LAYER_WIDTH = 9, LAYER_HEIGHT = 9）
-     - 钻头的中心点位置默认在每层地图的中心点（4, 4）
-     - 地图尺寸由常量定义，不可动态修改
+     - **逻辑网格**：每层地图固定为 9 列 × 9 行的离散格点（LAYER_WIDTH = 9, LAYER_HEIGHT = 9），用于存储矿石数据和挖掘结果。
+     - **视觉布局**：在 UI 层以**平顶六边形（flat-top）瓦片**的方式排列上述 9×9 逻辑格点，形成蜂窝状棋盘效果，而不再是简单的正方形棋盘。
+     - **中心点**：钻头的逻辑中心点位置默认仍为每层地图的中心点 `(4, 4)`，六边形布局仅影响渲染坐标，不改变逻辑坐标与存档结构。
+     - **坐标映射规则（奇行偏移 odd-r offset）**：
+       - 使用 `(x, y)` 作为逻辑网格坐标，其中 `x ∈ [0,8]`、`y ∈ [0,8]`，`y = 0` 为最上方一行。
+       - 将 `(x, y)` 映射为屏幕局部坐标时，采用**奇数行右偏移**的平顶六边形布局：
+         - 设单格宽度为 `w`、高度为 `h`，则水平方向中心间距约为 `w * 0.75`，竖直方向中心间距约为 `h * 0.866`。
+         - 对于第 `y` 行，如果 `y` 为奇数，则在水平方向额外右移 `w * 0.5`，否则不偏移。
+         - UI 中最终局部坐标近似为：
+           - \( x_{\text{screen}} = (x \times 0.75w + (y \bmod 2) \times 0.5w) + x_{\text{offset}} \)
+           - \( y_{\text{screen}} = (y \times 0.866h) + y_{\text{offset}} \)
+       - `x_offset` / `y_offset` 由 `MiningMapView` 根据容器大小自适应计算，保证整张 9×9 六边形地图完整显示在左侧面板中。
+     - 地图尺寸仍由常量定义，不可动态修改，如需扩展层宽/高，应同时更新逻辑网格与六边形映射规则。
    - **挖矿地图高亮规则**：
      - 在挖矿地图上，根据钻头的攻击范围进行视觉高亮显示
      - 高亮规则：在钻头攻击范围内的格子会高亮显示（混合淡黄色，30%混合度）
@@ -3353,6 +3405,7 @@ public class SettingsManager : MonoBehaviour
 - **日志文件**: 保存到 `logs/` 目录
 - **日志轮转**: 防止日志文件过大
 - **控制台输出**: 开发时输出到控制台
+- **AI 调试日志**: 当接入基于 `.cursor/debug.log` 的 AI 调试会话时，Unity C# 侧的临时诊断日志统一写入工作区根目录的 `.cursor/debug.log` 文件，文件路径由当前调试会话提供，应避免硬编码具体盘符（如 `F:\`），而是保持与当前工作区绝对路径配置一致。
 
 #### 7.5 本地化系统详细设计
 

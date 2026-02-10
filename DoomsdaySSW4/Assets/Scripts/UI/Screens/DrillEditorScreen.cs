@@ -37,15 +37,6 @@ public class DrillEditorScreen : MonoBehaviour
     {
         _platformManager = DrillPlatformManager.Instance;
         _turnManager = TurnManager.Instance;
-
-        // #region agent log
-        try
-        {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"ui-debug-1\",\"hypothesisId\":\"HE2\",\"location\":\"DrillEditorScreen.Awake\",\"message\":\"DrillEditorScreen Awake\",\"data\":{\"panelNull\":" + (panel == null ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
     }
 
     private void Start()
@@ -118,15 +109,6 @@ public class DrillEditorScreen : MonoBehaviour
     /// </summary>
     public void Show()
     {
-        // #region agent log
-        try
-        {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"ui-debug-1\",\"hypothesisId\":\"HE3\",\"location\":\"DrillEditorScreen.Show\",\"message\":\"Show called\",\"data\":{\"canEdit\":" + (CanEdit() ? "true" : "false") + ",\"panelNull\":" + (panel == null ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText(@"e:\Work\Cursor\DoomsdaySSW4\.cursor\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
-
         // 检查是否允许编辑
         if (!CanEdit())
         {
@@ -242,15 +224,6 @@ public class DrillEditorScreen : MonoBehaviour
     /// </summary>
     public void TryPlaceAtPosition(Vector2Int position)
     {
-        // #region agent log
-        try
-        {
-            var logEnter = "{\"sessionId\":\"debug-session\",\"runId\":\"drag-debug-1\",\"hypothesisId\":\"H2\",\"location\":\"DrillEditorScreen.TryPlaceAtPosition\",\"message\":\"Enter TryPlaceAtPosition\",\"data\":{\"posX\":" + position.x + ",\"posY\":" + position.y + ",\"pendingShapeId\":\"" + (_pendingShapeId ?? "null") + "\",\"pendingRotation\":" + _pendingShapeRotation + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", logEnter + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
-
         if (string.IsNullOrEmpty(_pendingShapeId))
         {
             // 如果没有待放置的造型，检查是否点击了已有造型
@@ -264,15 +237,6 @@ public class DrillEditorScreen : MonoBehaviour
         
         // 使用当前记录的旋转角度尝试放置
         PlaceResult result = _platformManager.TryPlaceShape(_pendingShapeId, position, _pendingShapeRotation);
-
-        // #region agent log
-        try
-        {
-            var logResult = "{\"sessionId\":\"debug-session\",\"runId\":\"drag-debug-1\",\"hypothesisId\":\"H3\",\"location\":\"DrillEditorScreen.TryPlaceAtPosition\",\"message\":\"PlaceShape result\",\"data\":{\"posX\":" + position.x + ",\"posY\":" + position.y + ",\"pendingShapeId\":\"" + (_pendingShapeId ?? "null") + "\",\"pendingRotation\":" + _pendingShapeRotation + ",\"success\":" + (result != null && result.success ? "true" : "false") + ",\"error\":\"" + (result != null && result.errorMessage != null ? result.errorMessage : "") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", logResult + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
         
         if (result.success)
         {
