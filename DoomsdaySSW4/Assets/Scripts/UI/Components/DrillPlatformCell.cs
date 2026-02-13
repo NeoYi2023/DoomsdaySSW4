@@ -10,15 +10,17 @@ using UnityEngine.EventSystems;
 /// </summary>
 public class DrillPlatformCell : MonoBehaviour
 {
-    [Header("平台坐标（0~8）")]
-    [Range(0, DrillPlatformData.PLATFORM_SIZE - 1)]
+    [Header("平台坐标（0~10）")]
+    // Inspector 允许配置 0~10，用于预留未来更大平台（10x10、11x11 等）扩展；
+    // 实际逻辑有效范围仍由 DrillPlatformData.PLATFORM_SIZE 决定（当前为 9，对应 0~8）。
+    [Range(0, 10)]
     public int x;
 
-    [Range(0, DrillPlatformData.PLATFORM_SIZE - 1)]
+    [Range(0, 10)]
     public int y;
 
     /// <summary>
-    /// 该格子在平台中的坐标（左下角为 (0,0)，右上角为 (8,8)）
+    /// 该格子在平台中的坐标（左下角为 (0,0)，右上角逻辑上由 DrillPlatformData.PLATFORM_SIZE - 1 决定；当前 PLATFORM_SIZE = 9，对应 (8,8)，未来若扩展为更大平台，则为 (PLATFORM_SIZE - 1, PLATFORM_SIZE - 1)）
     /// </summary>
     public Vector2Int GridPosition => new Vector2Int(x, y);
 
@@ -44,6 +46,7 @@ public class DrillPlatformCell : MonoBehaviour
         {
             eventTrigger = GetComponent<EventTrigger>();
         }
+
     }
 }
 

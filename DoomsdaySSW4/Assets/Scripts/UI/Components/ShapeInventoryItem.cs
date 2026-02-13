@@ -30,15 +30,6 @@ public class ShapeInventoryItem : MonoBehaviour, IBeginDragHandler, IDragHandler
             }
         }
 
-        // #region agent log
-        try
-        {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"drag-debug-1\",\"hypothesisId\":\"H0\",\"location\":\"ShapeInventoryItem.Setup\",\"message\":\"Setup inventory item\",\"data\":{\"shapeId\":\"" + (_config != null ? _config.shapeId : "null") + "\",\"hasEditorScreen\":" + (_editorScreen != null ? "true" : "false") + ",\"hasPlatformView\":" + (_platformView != null ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
-
         if (nameText != null)
         {
             nameText.text = config.shapeName;
@@ -46,12 +37,12 @@ public class ShapeInventoryItem : MonoBehaviour, IBeginDragHandler, IDragHandler
 
         if (attackText != null)
         {
-            attackText.text = $"π•ª˜: {config.baseAttackStrength}";
+            attackText.text = $"ùùùù: {config.baseAttackStrength}";
         }
 
         if (cellCountText != null)
         {
-            cellCountText.text = $"∏Ò◊”: {config.CellCount}";
+            cellCountText.text = $"ùùùù: {config.CellCount}";
         }
 
         if (descriptionText != null)
@@ -78,15 +69,6 @@ public class ShapeInventoryItem : MonoBehaviour, IBeginDragHandler, IDragHandler
         }
 
         _isDragging = true;
-
-        // #region agent log
-        try
-        {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"drag-debug-1\",\"hypothesisId\":\"H1\",\"location\":\"ShapeInventoryItem.OnBeginDrag\",\"message\":\"Begin drag from inventory\",\"data\":{\"shapeId\":\"" + (_config != null ? _config.shapeId : "null") + "\",\"hasEditorScreen\":" + (_editorScreen != null ? "true" : "false") + ",\"hasPlatformView\":" + (_platformView != null ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
 
         if (_editorScreen != null)
         {
@@ -131,15 +113,6 @@ public class ShapeInventoryItem : MonoBehaviour, IBeginDragHandler, IDragHandler
         }
 
         _isDragging = false;
-
-        // #region agent log
-        try
-        {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"drag-debug-1\",\"hypothesisId\":\"H1\",\"location\":\"ShapeInventoryItem.OnEndDrag\",\"message\":\"End drag from inventory\",\"data\":{\"shapeId\":\"" + (_config != null ? _config.shapeId : "null") + "\",\"posX\":" + eventData.position.x + ",\"posY\":" + eventData.position.y + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
 
         if (_editorScreen != null)
         {

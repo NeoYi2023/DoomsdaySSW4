@@ -26,6 +26,15 @@ public class HexLayoutGroup : LayoutGroup
         Odd
     }
 
+    /// <summary>
+    /// 布局起点：TopLeft 为左上角（row 0 在上），BottomLeft 为左下角（row 0 在下）。
+    /// </summary>
+    public enum HexLayoutStartCorner
+    {
+        TopLeft,
+        BottomLeft
+    }
+
     [SerializeField]
     private Vector2 cellSize = new Vector2(100f, 100f);
 
@@ -43,7 +52,28 @@ public class HexLayoutGroup : LayoutGroup
 
     [SerializeField]
     [Min(1)]
-    private int constraintCount = 9;
+    private int constraintCountEven = 9;
+
+    [SerializeField]
+    [Min(1)]
+    private int constraintCountOdd = 9;
+
+    [SerializeField]
+    private HexLayoutStartCorner startCorner = HexLayoutStartCorner.TopLeft;
+
+    /// <summary>
+    /// 布局起点：TopLeft 左上角，BottomLeft 左下角（row 0 在底部）。
+    /// </summary>
+    public HexLayoutStartCorner StartCorner
+    {
+        get => startCorner;
+        set
+        {
+            if (startCorner == value) return;
+            startCorner = value;
+            SetDirty();
+        }
+    }
 
     /// <summary>
     /// 单元格尺寸（包围盒大小）。
@@ -106,14 +136,47 @@ public class HexLayoutGroup : LayoutGroup
         }
     }
 
-    public int ConstraintCount
+    /// <summary>
+    /// 偶数行（row 0, 2, 4, …）每行格子数。
+    /// </summary>
+    public int ConstraintCountEven
     {
-        get => Mathf.Max(1, constraintCount);
+        get => Mathf.Max(1, constraintCountEven);
         set
         {
             value = Mathf.Max(1, value);
-            if (constraintCount == value) return;
-            constraintCount = value;
+            if (constraintCountEven == value) return;
+            constraintCountEven = value;
+            SetDirty();
+        }
+    }
+
+    /// <summary>
+    /// 奇数行（row 1, 3, 5, …）每行格子数。
+    /// </summary>
+    public int ConstraintCountOdd
+    {
+        get => Mathf.Max(1, constraintCountOdd);
+        set
+        {
+            value = Mathf.Max(1, value);
+            if (constraintCountOdd == value) return;
+            constraintCountOdd = value;
+            SetDirty();
+        }
+    }
+
+    /// <summary>
+    /// 兼容：返回偶数行与奇数行数量的较大值。
+    /// </summary>
+    public int ConstraintCount
+    {
+        get => Mathf.Max(ConstraintCountEven, ConstraintCountOdd);
+        set
+        {
+            value = Mathf.Max(1, value);
+            constraintCountEven = value;
+            constraintCountOdd = value;
             SetDirty();
         }
     }
@@ -159,9 +222,35 @@ public class HexLayoutGroup : LayoutGroup
         LayoutChildren();
     }
 
+    /// <summary>
+    /// 根据子节点索引 i 得到所在行、列（行优先，偶数行/奇数行数量可不同）。
+    /// </summary>
+    private void GetRowColFromIndex(int i, out int row, out int col)
+    {
+        int countEven = ConstraintCountEven;
+        int countOdd = ConstraintCountOdd;
+        int index = 0;
+        for (row = 0; row < 1000; row++)
+        {
+            int countThisRow = (row % 2 == 0) ? countEven : countOdd;
+            if (i < index + countThisRow)
+            {
+                col = i - index;
+                return;
+            }
+            index += countThisRow;
+        }
+        row = 0;
+        col = 0;
+    }
+
+    /// <summary>
+    /// 根据子节点总数计算行数与最大列数（用于尺寸计算）。
+    /// </summary>
     private void GetGridSize(int childCount, out int columns, out int rows)
     {
-        int constraint = ConstraintCount;
+        int countEven = ConstraintCountEven;
+        int countOdd = ConstraintCountOdd;
         if (childCount <= 0)
         {
             columns = 0;
@@ -169,8 +258,15 @@ public class HexLayoutGroup : LayoutGroup
             return;
         }
 
-        columns = Mathf.Min(constraint, childCount);
-        rows = Mathf.CeilToInt(childCount / (float)constraint);
+        columns = Mathf.Max(countEven, countOdd);
+        int index = 0;
+        rows = 0;
+        for (int r = 0; index < childCount; r++)
+        {
+            int countThisRow = (r % 2 == 0) ? countEven : countOdd;
+            index += countThisRow;
+            rows = r + 1;
+        }
     }
 
     /// <summary>
@@ -202,9 +298,22 @@ public class HexLayoutGroup : LayoutGroup
             verticalStep = 0.75f * h + spacing.y;
         }
 
-        // 近似整体宽高： (cols - 1) * step + w
+        // 整体宽高 = (cols - 1) * step + cellSize
         float totalWidth = (columns - 1) * horizontalStep + w;
         float totalHeight = (rows - 1) * verticalStep + h;
+
+        // stagger 偏移：奇数行/列会额外偏移 0.5 * step，需加到对应维度
+        if (rows > 1)
+        {
+            if (orientation == HexOrientation.FlatTop && staggerAxis == HexStaggerAxis.Row)
+                totalWidth += 0.5f * horizontalStep;
+            else if (orientation == HexOrientation.FlatTop && staggerAxis == HexStaggerAxis.Column)
+                totalHeight += 0.5f * verticalStep;
+            else if (orientation == HexOrientation.PointyTop && staggerAxis == HexStaggerAxis.Row)
+                totalWidth += 0.5f * horizontalStep;
+            else if (orientation == HexOrientation.PointyTop && staggerAxis == HexStaggerAxis.Column)
+                totalHeight += 0.5f * verticalStep;
+        }
 
         return new Vector2(totalWidth, totalHeight);
     }
@@ -242,10 +351,7 @@ public class HexLayoutGroup : LayoutGroup
                 continue;
             }
 
-            int row = i / ConstraintCount;
-            int col = i % ConstraintCount;
-
-            // 对于最后一行可能不足 constraintCount 的情况，仍然按完整列数计算位置，这样视觉上更规整
+            GetRowColFromIndex(i, out int row, out int col);
 
             float localX;
             float localY;
@@ -257,6 +363,12 @@ public class HexLayoutGroup : LayoutGroup
             else
             {
                 ComputePointyTopPosition(row, col, pointyHorizontalStep, pointyVerticalStep, out localX, out localY);
+            }
+
+            if (startCorner == HexLayoutStartCorner.BottomLeft)
+            {
+                float verticalStep = orientation == HexOrientation.FlatTop ? flatVerticalStep : pointyVerticalStep;
+                localY = (rows - 1) * verticalStep - localY;
             }
 
             float posX = startX + localX;
@@ -281,7 +393,7 @@ public class HexLayoutGroup : LayoutGroup
 
             if (isStaggered)
             {
-                rowOffsetX = 0.5f * cellSize.x;
+                rowOffsetX = 0.5f * horizontalStep;
             }
         }
         else // Column stagger
@@ -292,7 +404,7 @@ public class HexLayoutGroup : LayoutGroup
 
             if (isStaggered)
             {
-                colOffsetY = 0.5f * cellSize.y;
+                colOffsetY = 0.5f * verticalStep;
             }
         }
 
@@ -313,7 +425,7 @@ public class HexLayoutGroup : LayoutGroup
 
             if (isStaggered)
             {
-                colOffsetY = 0.5f * cellSize.y;
+                colOffsetY = 0.5f * verticalStep;
             }
         }
         else // Row stagger
@@ -324,7 +436,7 @@ public class HexLayoutGroup : LayoutGroup
 
             if (isStaggered)
             {
-                rowOffsetX = 0.5f * cellSize.x;
+                rowOffsetX = 0.5f * horizontalStep;
             }
         }
 
@@ -347,7 +459,8 @@ public class HexLayoutGroup : LayoutGroup
     protected override void OnValidate()
     {
         base.OnValidate();
-        constraintCount = Mathf.Max(1, constraintCount);
+        constraintCountEven = Mathf.Max(1, constraintCountEven);
+        constraintCountOdd = Mathf.Max(1, constraintCountOdd);
         cellSize.x = Mathf.Max(0.0f, cellSize.x);
         cellSize.y = Mathf.Max(0.0f, cellSize.y);
         SetDirty();

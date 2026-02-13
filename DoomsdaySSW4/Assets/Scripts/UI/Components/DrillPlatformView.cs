@@ -2,7 +2,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
+using System;
 using System.Collections.Generic;
+using System.IO;
 
 /// <summary>
 /// 钻机平台视图：显示9x9的钻机平台网格和已放置的造型，
@@ -13,7 +15,9 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     [Header("网格设置")]
     [SerializeField] private RectTransform gridContainer;
     [SerializeField] private GameObject cellPrefab;
+    [Tooltip("与 GridRoot 的 HexLayoutGroup.CellSize 保持一致时六边形布局更一致。")]
     [SerializeField] private float cellSize = 40f;
+    [Tooltip("与 GridRoot 的 HexLayoutGroup.Spacing 保持一致。")]
     [SerializeField] private float cellSpacing = 2f;
     
     [Header("颜色设置")]
@@ -47,15 +51,6 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         if (editorScreen == null)
         {
             editorScreen = GetComponentInParent<DrillEditorScreen>(true);
-
-            // #region agent log
-            try
-            {
-                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"drag-debug-1\",\"hypothesisId\":\"H5\",\"location\":\"DrillPlatformView.Awake\",\"message\":\"Auto assign editorScreen\",\"data\":{\"found\":" + (editorScreen != null ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-            }
-            catch { }
-            // #endregion
         }
     }
 
@@ -87,85 +82,61 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
 
         _cellObjects.Clear();
 
-        // 从子节点中收集所有 DrillPlatformCell 标记组件
-        DrillPlatformCell[] cells = gridContainer.GetComponentsInChildren<DrillPlatformCell>(true);
-        if (cells == null || cells.Length == 0)
+        // ====================================================================
+        // 自动从 sibling 顺序计算 row-major 坐标（不依赖 Inspector 序列化的 x/y），
+        // 只处理前 PLATFORM_SIZE×PLATFORM_SIZE 个格子，多余的外圈装饰格子自动跳过。
+        // ====================================================================
+        int size = DrillPlatformData.PLATFORM_SIZE;
+        int maxLogicCells = size * size; // 9×9 = 81
+
+        // 定位实际的格子容器：如果 gridContainer 只有 1 个子节点（GridRoot），则进入它
+        Transform cellContainer = gridContainer;
+        if (gridContainer.childCount == 1)
         {
-            Debug.LogError("DrillPlatformView: 在 gridContainer 下未找到任何 DrillPlatformCell，请在 PlatformGrid 下布置 9x9 格子并挂载该组件。");
+            Transform child = gridContainer.GetChild(0);
+            if (child.childCount > 0)
+            {
+                cellContainer = child;
+            }
+        }
+
+        int totalChildren = cellContainer.childCount;
+        if (totalChildren == 0)
+        {
+            Debug.LogError("DrillPlatformView: 在 gridContainer 下未找到任何子节点，请在 PlatformGrid 下布置 9x9 格子并挂载 DrillPlatformCell 组件。");
             return;
         }
 
-        // #region agent log
-        try
+        int logicIdx = 0; // 逻辑格子计数（用于计算 row-major 坐标）
+        for (int i = 0; i < totalChildren; i++)
         {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H1,H2,H3\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Found cells count\",\"data\":{\"totalCells\":" + cells.Length + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
+            Transform childTransform = cellContainer.GetChild(i);
+            if (childTransform == null) continue;
 
-        foreach (var cell in cells)
-        {
+            // 跳过FogMaskContainer及其子节点
+            if (childTransform.name == "FogMaskContainer" || childTransform.name.Contains("FogTile_"))
+            {
+                continue;
+            }
+
+            DrillPlatformCell cell = childTransform.GetComponent<DrillPlatformCell>();
             if (cell == null) continue;
 
-            // 跳过FogMaskContainer及其子节点（防止FogMaskContainer挤占格子位置）
-            bool isFogMaskRelated = false;
-            Transform cellTransform = cell.transform;
-            while (cellTransform != null && cellTransform != gridContainer)
+            // 超过 81 个逻辑格子的为外圈装饰格子，跳过
+            if (logicIdx >= maxLogicCells)
             {
-                if (cellTransform.name == "FogMaskContainer" || cellTransform.name.Contains("FogTile_"))
-                {
-                    Debug.LogWarning($"DrillPlatformView: 跳过FogMaskContainer相关节点: {cell.gameObject.name}");
-                    isFogMaskRelated = true;
-                    break;
-                }
-                cellTransform = cellTransform.parent;
-            }
-            if (isFogMaskRelated)
-            {
-                continue; // 跳过FogMaskContainer相关节点
-            }
-
-            Vector2Int pos = cell.GridPosition;
-
-            // #region agent log
-            try
-            {
-                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H1,H2,H3\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Processing cell\",\"data\":{\"x\":" + pos.x + ",\"y\":" + pos.y + ",\"name\":\"" + (cell.gameObject != null ? cell.gameObject.name : "null") + "\",\"active\":" + (cell.gameObject != null ? cell.gameObject.activeSelf.ToString().ToLower() : "null") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-            }
-            catch { }
-            // #endregion
-
-            // 坐标范围校验
-            if (pos.x < 0 || pos.x >= DrillPlatformData.PLATFORM_SIZE ||
-                pos.y < 0 || pos.y >= DrillPlatformData.PLATFORM_SIZE)
-            {
-                // #region agent log
-                try
-                {
-                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H1\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Cell out of bounds\",\"data\":{\"x\":" + pos.x + ",\"y\":" + pos.y + ",\"name\":\"" + (cell.gameObject != null ? cell.gameObject.name : "null") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                    System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-                }
-                catch { }
-                // #endregion
-                Debug.LogError($"DrillPlatformView: DrillPlatformCell 坐标越界 ({pos.x},{pos.y})，节点：{cell.gameObject.name}");
+                logicIdx++;
                 continue;
             }
 
-            if (_cellObjects.ContainsKey(pos))
-            {
-                // #region agent log
-                try
-                {
-                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H2\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Duplicate cell coordinate\",\"data\":{\"x\":" + pos.x + ",\"y\":" + pos.y + ",\"name\":\"" + (cell.gameObject != null ? cell.gameObject.name : "null") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                    System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-                }
-                catch { }
-                // #endregion
-                Debug.LogError($"DrillPlatformView: 检测到重复的格子坐标 ({pos.x},{pos.y})，节点：{cell.gameObject.name}");
-                continue;
-            }
+            // 从 sibling 顺序自动计算 row-major 坐标：row 0 在下，row 8 在上
+            int col = logicIdx % size;
+            int row = logicIdx / size;
+            Vector2Int pos = new Vector2Int(col, row);
+
+            // 将正确坐标写回组件，修正 Inspector 中的错误值
+            cell.x = col;
+            cell.y = row;
 
             GameObject cellObj = cell.gameObject;
 
@@ -221,25 +192,13 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             trigger.triggers.Add(exitEntry);
 
             _cellObjects[pos] = cellObj;
-
-            // #region agent log
-            try
-            {
-                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H3\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Cell added to dictionary\",\"data\":{\"x\":" + pos.x + ",\"y\":" + pos.y + ",\"dictSize\":" + _cellObjects.Count + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-            }
-            catch { }
-            // #endregion
+            logicIdx++;
         }
 
-        // #region agent log
-        try
+        if (_cellObjects.Count < maxLogicCells)
         {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H3\",\"location\":\"DrillPlatformView.InitGridFromChildren\",\"message\":\"Init complete, final dict size\",\"data\":{\"dictSize\":" + _cellObjects.Count + ",\"has0_8\":" + _cellObjects.ContainsKey(new Vector2Int(0, 8)).ToString().ToLower() + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
+            Debug.LogWarning($"DrillPlatformView: 有效逻辑格子数量不足 ({_cellObjects.Count}/{maxLogicCells})，请检查 PlatformGrid 下是否有足够的 DrillPlatformCell 子节点。");
         }
-        catch { }
-        // #endregion
 
         Refresh();
     }
@@ -262,31 +221,10 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         HashSet<Vector2Int> occupiedCells = _platformManager.GetAllOccupiedCells();
         HashSet<Vector2Int> highlightedCells = GetHighlightedCells();
 
-        // #region agent log
-        try
-        {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H4\",\"location\":\"DrillPlatformView.Refresh\",\"message\":\"Refresh start\",\"data\":{\"cellObjectsCount\":" + _cellObjects.Count + ",\"occupiedCellsCount\":" + occupiedCells.Count + ",\"has0_8\":" + _cellObjects.ContainsKey(new Vector2Int(0, 8)).ToString().ToLower() + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
-
         foreach (var kvp in _cellObjects)
         {
             Vector2Int pos = kvp.Key;
             GameObject cellObj = kvp.Value;
-            
-            // #region agent log
-            if (pos.x == 0 && pos.y == 8)
-            {
-                try
-                {
-                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H4\",\"location\":\"DrillPlatformView.Refresh\",\"message\":\"Processing cell 0,8\",\"data\":{\"cellObjNull\":" + (cellObj == null ? "true" : "false") + ",\"active\":" + (cellObj != null ? cellObj.activeSelf.ToString().ToLower() : "null") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                    System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-                }
-                catch { }
-            }
-            // #endregion
             
             if (cellObj == null) continue;
             
@@ -305,37 +243,7 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             {
                 image.color = emptyColor;
             }
-
-            // #region agent log
-            if (pos.x == 0 && pos.y == 8)
-            {
-                try
-                {
-                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H4\",\"location\":\"DrillPlatformView.Refresh\",\"message\":\"Cell 0,8 color set\",\"data\":{\"isHighlighted\":" + highlightedCells.Contains(pos).ToString().ToLower() + ",\"isOccupied\":" + occupiedCells.Contains(pos).ToString().ToLower() + ",\"color\":\"" + image.color.ToString() + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                    System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-                }
-                catch { }
-            }
-            // #endregion
         }
-
-        // #region agent log
-        try
-        {
-            List<string> y9Cells = new List<string>();
-            foreach (KeyValuePair<Vector2Int, GameObject> kvp in _cellObjects)
-            {
-                if (kvp.Key.y == 9)
-                {
-                    y9Cells.Add("{\"x\":" + kvp.Key.x + ",\"y\":" + kvp.Key.y + "}");
-                }
-            }
-            string y9CellsJson = y9Cells.Count > 0 ? string.Join(",", y9Cells) : "";
-            string log = "{\"sessionId\":\"debug-session\",\"runId\":\"grid-init-1\",\"hypothesisId\":\"H5\",\"location\":\"DrillPlatformView.Refresh\",\"message\":\"Checking for Y=9 cells\",\"data\":{\"y9Cells\":[" + y9CellsJson + "]},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
     }
 
     /// <summary>
@@ -621,28 +529,7 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
 
         if (gridPos.HasValue && editorScreen != null)
         {
-            // #region agent log
-            try
-            {
-                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"drag-debug-1\",\"hypothesisId\":\"H4\",\"location\":\"DrillPlatformView.EndInventoryDrag\",\"message\":\"End inventory drag\",\"data\":{\"shapeId\":\"" + (shapeId ?? "null") + "\",\"rotation\":" + rotation + ",\"gridX\":" + gridPos.Value.x + ",\"gridY\":" + gridPos.Value.y + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-            }
-            catch { }
-            // #endregion
-
-            // 最终是否能放下由编辑界面的 TryPlaceAtPosition 决定
             editorScreen.TryPlaceAtPosition(gridPos.Value);
-        }
-        else
-        {
-            // #region agent log
-            try
-            {
-                var log = "{\"sessionId\":\"debug-session\",\"runId\":\"drag-debug-1\",\"hypothesisId\":\"H4\",\"location\":\"DrillPlatformView.EndInventoryDrag\",\"message\":\"End inventory drag without valid gridPos\",\"data\":{\"shapeId\":\"" + (shapeId ?? "null") + "\",\"rotation\":" + rotation + ",\"hoveredHasValue\":" + (_hoveredCell.HasValue ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                System.IO.File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-            }
-            catch { }
-            // #endregion
         }
 
         _hoveredCell = null;
@@ -692,25 +579,51 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     }
 
     /// <summary>
-    /// 从世界坐标获取网格坐标
+    /// 从世界坐标获取网格坐标。
+    /// 六边形布局下相邻格子矩形会重叠，若有多个格子包含该点则返回中心距离最近的一格。
     /// </summary>
     public Vector2Int? WorldToGridPosition(Vector3 worldPosition)
     {
+        List<KeyValuePair<Vector2Int, GameObject>> containing = new List<KeyValuePair<Vector2Int, GameObject>>();
+
         foreach (var kvp in _cellObjects)
         {
             RectTransform rect = kvp.Value.GetComponent<RectTransform>();
-            if (rect != null)
+            if (rect == null) continue;
+
+            Vector3[] corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+
+            if (worldPosition.x >= corners[0].x && worldPosition.x <= corners[2].x &&
+                worldPosition.y >= corners[0].y && worldPosition.y <= corners[2].y)
             {
-                Vector3[] corners = new Vector3[4];
-                rect.GetWorldCorners(corners);
-                
-                if (worldPosition.x >= corners[0].x && worldPosition.x <= corners[2].x &&
-                    worldPosition.y >= corners[0].y && worldPosition.y <= corners[2].y)
-                {
-                    return kvp.Key;
-                }
+                containing.Add(kvp);
             }
         }
-        return null;
+
+        if (containing.Count == 0)
+            return null;
+        if (containing.Count == 1)
+            return containing[0].Key;
+
+        // 多格重叠（六边形边缘）：取格子中心与 worldPosition 距离最小的一格
+        float minDistSq = float.MaxValue;
+        Vector2Int best = containing[0].Key;
+        Vector2 pos2 = new Vector2(worldPosition.x, worldPosition.y);
+
+        for (int i = 0; i < containing.Count; i++)
+        {
+            RectTransform rect = containing[i].Value.GetComponent<RectTransform>();
+            if (rect == null) continue;
+            Vector2 center = rect.position;
+            float dSq = (pos2 - center).sqrMagnitude;
+            if (dSq < minDistSq)
+            {
+                minDistSq = dSq;
+                best = containing[i].Key;
+            }
+        }
+
+        return best;
     }
 }

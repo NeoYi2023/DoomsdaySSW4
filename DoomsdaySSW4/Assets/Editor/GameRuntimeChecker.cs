@@ -282,6 +282,29 @@ public class GameRuntimeChecker : EditorWindow
         {
             successes.Add("UpgradeSelectionScreen存在");
         }
+
+        // 检查钻机编辑界面下的平台格子容器（PlatformGrid/GridRoot）布局组件
+        DrillEditorScreen drillEditorScreen = FindObjectOfType<DrillEditorScreen>();
+        if (drillEditorScreen != null)
+        {
+            Transform panel = drillEditorScreen.transform.Find("DrillEditorPanel");
+            Transform platformGrid = panel != null ? panel.Find("PlatformGrid") : null;
+            Transform gridRoot = platformGrid != null ? platformGrid.Find("GridRoot") : null;
+            Transform layoutContainer = gridRoot != null ? gridRoot : platformGrid;
+            if (layoutContainer != null)
+            {
+                bool hasGridLayout = layoutContainer.GetComponent<GridLayoutGroup>() != null;
+                bool hasHexLayout = layoutContainer.GetComponent<HexLayoutGroup>() != null;
+                if (!hasGridLayout && !hasHexLayout)
+                {
+                    issues.Add("钻机平台格子容器（PlatformGrid 或 GridRoot）缺少布局组件，需要 GridLayoutGroup 或 HexLayoutGroup 之一");
+                }
+                else
+                {
+                    successes.Add("钻机平台格子容器存在布局组件（Grid 或 Hex）");
+                }
+            }
+        }
     }
 
     private void CheckPanelChild(Transform parent, string panelName, string[] childNames)

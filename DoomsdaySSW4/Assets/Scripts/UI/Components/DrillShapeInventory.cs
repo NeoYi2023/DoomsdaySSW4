@@ -136,16 +136,6 @@ public class DrillShapeInventory : MonoBehaviour
 
         // 获取可用造型
         List<string> availableShapeIds = _platformManager.GetAvailableShapeIds();
-
-        // #region agent log
-        try
-        {
-            string joined = string.Join(",", availableShapeIds);
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H2\",\"location\":\"DrillShapeInventory.Refresh\",\"message\":\"Inventory refresh\",\"data\":{\"count\":" + availableShapeIds.Count + ",\"shapeIds\":\"" + joined + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
         
         // 计算内容高度
         float totalHeight = availableShapeIds.Count * (itemHeight + itemSpacing) - itemSpacing;
@@ -158,14 +148,6 @@ public class DrillShapeInventory : MonoBehaviour
             DrillShapeConfig config = _configManager.GetDrillShapeConfig(shapeId);
             if (config == null)
             {
-                // #region agent log
-                try
-                {
-                    var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H3\",\"location\":\"DrillShapeInventory.Refresh\",\"message\":\"Shape config missing\",\"data\":{\"shapeId\":\"" + (shapeId ?? "") + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                    File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-                }
-                catch { }
-                // #endregion
                 continue;
             }
 

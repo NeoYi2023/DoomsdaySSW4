@@ -4,17 +4,19 @@ using TMPro;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.IO;
 using System;
 
 /// <summary>
-/// 挖矿地图视图：显示9x9的挖矿地图
+/// 挖矿地图视图：显示挖矿地图（逻辑为 9x9 网格，可在 UI 层通过 HexLayoutGroup 扩展为 94 格正六边形布局）
 /// </summary>
 public class MiningMapView : MonoBehaviour
 {
     [Header("地图设置")]
     [SerializeField] private GridLayoutGroup gridLayout;
-    [SerializeField] private GameObject tilePrefab; // 瓦片预制体（可选，如果为空则动态创建）
+    [SerializeField] private HexLayoutGroup hexLayout; // 六边形布局组件（与 PlatformGrid 保持一致）
+    [SerializeField] private RectTransform mapGridRoot; // 静态格子容器（MapGridRoot，挂 HexLayoutGroup + 若干 MiningMapCell，支持 81 逻辑格 + 额外装饰格）
+    [SerializeField] private bool useStaticCells = false; // 为 true 时从 mapGridRoot 子节点初始化格子，不动态创建/销毁
+    [SerializeField] private GameObject tilePrefab; // 瓦片预制体（动态创建模式时使用，若为空则代码创建）
     [Header("自适应设置")]
     [SerializeField] private bool autoResize = true; // 是否自动调整大小
     [SerializeField] private Vector2 spacing = new Vector2(5, 5); // 格子间距
@@ -85,55 +87,138 @@ public class MiningMapView : MonoBehaviour
             _parentRectTransform = transform.parent.GetComponent<RectTransform>();
         }
 
-        // 如果没有GridLayoutGroup，创建一个
-        if (gridLayout == null)
+        if (useHexLayout)
         {
-            gridLayout = GetComponent<GridLayoutGroup>();
-            if (gridLayout == null)
+            // 静态格子模式：HexLayoutGroup 在 MapGridRoot 上，与 PlatformGrid/GridRoot 一致
+            if (useStaticCells && mapGridRoot != null)
             {
-                gridLayout = gameObject.AddComponent<GridLayoutGroup>();
+                hexLayout = mapGridRoot.GetComponent<HexLayoutGroup>();
+                if (hexLayout == null)
+                    hexLayout = mapGridRoot.gameObject.AddComponent<HexLayoutGroup>();
             }
-        }
-
-        // 配置GridLayout基本设置（仅在未启用六边形布局时生效）
-        if (gridLayout != null)
-        {
-            gridLayout.spacing = spacing;
-            gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            gridLayout.constraintCount = MiningManager.LAYER_WIDTH; // 9列
-            
-            // 如果启用自适应，在Start中计算大小（此时RectTransform已正确初始化）
-            if (!autoResize)
+            // 动态模式：HexLayoutGroup 可在 Inspector 指定或挂在自身
+            if (hexLayout == null)
             {
-                gridLayout.cellSize = new Vector2(60, 60);
+                hexLayout = GetComponent<HexLayoutGroup>();
+                if (hexLayout == null)
+                    hexLayout = gameObject.AddComponent<HexLayoutGroup>();
             }
 
-            // 六边形布局下由脚本手动控制格子位置，关闭 GridLayout 自动排布
-            if (useHexLayout)
+            if (hexLayout != null)
+            {
+                // 与 Inspector 中 spacing 保持一致，便于和 PlatformGrid 参数统一
+                hexLayout.Spacing = spacing;
+
+                // 缺省参数设置为 9x9 平顶六边形 odd-r，与 SPEC 中约定保持一致（逻辑 9x9，可在 UI 中扩展为 94 格正六边形）
+                if (hexLayout.ConstraintCountEven <= 0) hexLayout.ConstraintCountEven = MiningManager.LAYER_WIDTH;
+                if (hexLayout.ConstraintCountOdd <= 0) hexLayout.ConstraintCountOdd = MiningManager.LAYER_WIDTH;
+                if (hexLayout.Orientation != HexLayoutGroup.HexOrientation.FlatTop)
+                {
+                    hexLayout.Orientation = HexLayoutGroup.HexOrientation.FlatTop;
+                }
+                if (hexLayout.StaggerAxis != HexLayoutGroup.HexStaggerAxis.Row)
+                {
+                    hexLayout.StaggerAxis = HexLayoutGroup.HexStaggerAxis.Row;
+                }
+                if (hexLayout.StaggerIndex != HexLayoutGroup.HexStaggerIndex.Odd)
+                {
+                    hexLayout.StaggerIndex = HexLayoutGroup.HexStaggerIndex.Odd;
+                }
+            }
+
+            // 六边形模式下不再依赖 GridLayoutGroup
+            if (gridLayout != null)
             {
                 gridLayout.enabled = false;
+            }
+        }
+        else
+        {
+            // 矩形网格模式：仍然使用 GridLayoutGroup
+            if (gridLayout == null)
+            {
+                gridLayout = GetComponent<GridLayoutGroup>();
+                if (gridLayout == null)
+                {
+                    gridLayout = gameObject.AddComponent<GridLayoutGroup>();
+                }
+            }
+
+            if (gridLayout != null)
+            {
+                gridLayout.spacing = spacing;
+                gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+                gridLayout.constraintCount = MiningManager.LAYER_WIDTH; // 9列
+
+                if (!autoResize)
+                {
+                    gridLayout.cellSize = new Vector2(60, 60);
+                }
             }
         }
     }
 
     private void Start()
     {
-        // 加载中文字体
         LoadChineseFont();
-        
-        // 初始化迷雾遮罩视图
         InitializeFogMaskView();
-        
-        // 如果启用自适应，计算格子大小
+
         if (autoResize)
-        {
             CalculateCellSize();
+
+        if (useStaticCells && mapGridRoot != null)
+        {
+            InitTilesFromChildren();
+            if (autoResize)
+                CalculateCellSize();
         }
-        
-        // 初始化地图显示
+
         UpdateMap(1);
     }
     
+    /// <summary>
+    /// 从 MapGridRoot 子节点中的 MiningMapCell 初始化 _tileMap（静态格子方案，与 PlatformGrid 一致）
+    /// </summary>
+    private void InitTilesFromChildren()
+    {
+        if (mapGridRoot == null) return;
+
+        _tileMap.Clear();
+        _tileObjects.Clear();
+
+        MiningMapCell[] cells = mapGridRoot.GetComponentsInChildren<MiningMapCell>(true);
+        if (cells == null || cells.Length == 0)
+        {
+            Debug.LogWarning("MiningMapView: mapGridRoot 下未找到 MiningMapCell，请使用编辑器至少生成覆盖 9x9 逻辑网格的格子（可在外圈补充装饰格）或关闭 useStaticCells。");
+            return;
+        }
+
+        int expectedLogicCount = MiningManager.LAYER_WIDTH * MiningManager.LAYER_HEIGHT;
+        foreach (MiningMapCell cell in cells)
+        {
+            if (cell == null) continue;
+            Vector2Int pos = cell.GridPosition;
+            if (pos.x < 0 || pos.x >= MiningManager.LAYER_WIDTH || pos.y < 0 || pos.y >= MiningManager.LAYER_HEIGHT)
+            {
+                Debug.LogWarning($"MiningMapView: MiningMapCell 坐标越界 ({pos.x},{pos.y})，节点 {cell.gameObject.name}");
+                continue;
+            }
+            if (_tileMap.ContainsKey(pos))
+            {
+                Debug.LogWarning($"MiningMapView: 重复坐标 ({pos.x},{pos.y})，节点 {cell.gameObject.name}");
+                continue;
+            }
+            if (cell.image == null) cell.image = cell.GetComponent<Image>();
+            if (cell.text == null) cell.text = cell.GetComponentInChildren<TextMeshProUGUI>(true);
+
+            _tileMap[pos] = cell.gameObject;
+            _tileObjects.Add(cell.gameObject);
+        }
+
+        if (_tileMap.Count != expectedLogicCount)
+            Debug.LogWarning($"MiningMapView: 参与逻辑的静态格子数量为 {_tileMap.Count}，期望覆盖 {expectedLogicCount} 个逻辑坐标 (0,0)..(8,8)。如使用 94 格正六边形布局，请确保至少 81 个格子映射到 9x9 逻辑网格，其余外圈格子仅作为装饰。");
+    }
+
     /// <summary>
     /// 初始化迷雾遮罩视图
     /// </summary>
@@ -162,7 +247,7 @@ public class MiningMapView : MonoBehaviour
     private void OnRectTransformDimensionsChange()
     {
         // 当RectTransform大小改变时，重新计算格子大小
-        if (autoResize && gridLayout != null)
+        if (autoResize)
         {
             CalculateCellSize();
         }
@@ -176,7 +261,12 @@ public class MiningMapView : MonoBehaviour
         RectTransform targetRect = null;
         
         // 决定使用哪个RectTransform的大小
-        if (useParentSize && _parentRectTransform != null)
+        // 静态格子模式：格子实际在 MapGridRoot 内，必须用 MapGridRoot 的 rect 计算，否则会按父节点（更大）算出 cellSize 导致格子偏大
+        if (useStaticCells && mapGridRoot != null)
+        {
+            targetRect = mapGridRoot;
+        }
+        else if (useParentSize && _parentRectTransform != null)
         {
             targetRect = _parentRectTransform;
         }
@@ -195,8 +285,20 @@ public class MiningMapView : MonoBehaviour
         float containerWidth = containerRect.width;
         float containerHeight = containerRect.height;
 
-        // 如果使用父容器大小，需要考虑当前容器的padding
-        RectOffset padding = gridLayout.padding;
+        // 如果使用父容器大小，需要考虑当前容器的padding（根据当前使用的布局组件获取）
+        RectOffset padding;
+        if (useHexLayout && hexLayout != null)
+        {
+            padding = hexLayout.padding;
+        }
+        else if (gridLayout != null)
+        {
+            padding = gridLayout.padding;
+        }
+        else
+        {
+            padding = new RectOffset();
+        }
         float paddingHorizontal = padding.left + padding.right;
         float paddingVertical = padding.top + padding.bottom;
 
@@ -221,29 +323,83 @@ public class MiningMapView : MonoBehaviour
         }
         else
         {
-            // 六边形布局：根据蜂窝整体宽高反推单个格子的宽高
-            // 水平方向近似长度： (columns - 1) * 0.75w + w  ≈ (columns * 0.75 + 0.25) * w
-            // 竖直方向近似高度： (rows - 1) * 0.866h + h  ≈ (rows * 0.866 + 0.134) * h
-            float effectiveCols = columns * 0.75f + 0.25f;
-            float effectiveRows = rows * 0.866f + 0.134f;
+            // 六边形布局：根据蜂窝整体宽高反推单个格子宽高
+            // 需要考虑：(1) 实际子节点行数 (2) spacing (3) stagger 偏移
 
-            cellWidth = availableWidth / Mathf.Max(effectiveCols, 1f);
-            cellHeight = availableHeight / Mathf.Max(effectiveRows, 1f);
+            // ── Step 1: 计算实际行列数（与 HexLayoutGroup.GetGridSize 一致） ──
+            int actualChildCount = 0;
+            if (useStaticCells && mapGridRoot != null)
+                actualChildCount = mapGridRoot.childCount;
+            else if (hexLayout != null)
+                actualChildCount = hexLayout.transform.childCount;
+
+            int countEven = hexLayout != null ? hexLayout.ConstraintCountEven : columns;
+            int countOdd = hexLayout != null ? hexLayout.ConstraintCountOdd : columns;
+            int maxCols = Mathf.Max(countEven, countOdd);
+
+            int actualRows = 0;
+            if (actualChildCount > 0)
+            {
+                int idx = 0;
+                for (int r = 0; idx < actualChildCount; r++)
+                {
+                    idx += (r % 2 == 0) ? countEven : countOdd;
+                    actualRows = r + 1;
+                }
+            }
+            else
+            {
+                actualRows = rows; // fallback: 使用逻辑行数 9
+                maxCols = columns;
+            }
+
+            // ── Step 2: 检查是否存在 stagger 偏移（奇数行水平偏移 0.5*horizontalStep） ──
+            bool hasStagger = actualRows > 1;
+
+            // ── Step 3: 从宽度约束反推 cellWidth ──
+            // 实际所需宽度 = Nw * (0.75*w + sx) + w
+            //   其中 Nw = (maxCols - 0.5) 若有 stagger，否则 (maxCols - 1)
+            // 解出 w = (availW - Nw * sx) / (0.75 * Nw + 1)
+            float Nw = hasStagger ? (maxCols - 0.5f) : (maxCols - 1f);
+            float cellWidthFromW = (availableWidth - Nw * spacing.x) / Mathf.Max(0.75f * Nw + 1f, 1f);
+
+            // ── Step 4: 从高度约束反推 cellHeight ──
+            // 实际所需高度 = Nh * (0.866*h + sy) + h
+            //   其中 Nh = actualRows - 1
+            // 解出 h = (availH - Nh * sy) / (0.866 * Nh + 1)
+            float Nh = actualRows - 1f;
+            float cellHeightFromH = (availableHeight - Nh * spacing.y) / Mathf.Max(0.866f * Nh + 1f, 1f);
+
+            // ── Step 5: 独立设置宽高，让格子同时填满水平和垂直方向 ──
+            cellWidth = cellWidthFromW;
+            cellHeight = cellHeightFromH;
+
         }
 
         // 确保大小为正数且合理
-        if (cellWidth > 0 && cellHeight > 0 && gridLayout != null)
+        if (cellWidth > 0 && cellHeight > 0)
         {
-            gridLayout.cellSize = new Vector2(cellWidth, cellHeight);
+            Vector2 cellSize = new Vector2(cellWidth, cellHeight);
+
+            if (useHexLayout && hexLayout != null)
+            {
+                hexLayout.CellSize = cellSize;
+                // 同步 spacing，保证与 PlatformGrid 的 HexLayoutGroup 视觉效果一致
+                hexLayout.Spacing = spacing;
+            }
+            else if (gridLayout != null)
+            {
+                gridLayout.cellSize = cellSize;
+            }
         }
-        else if (gridLayout != null)
+        else if (gridLayout != null && !useHexLayout)
         {
             Debug.LogWarning($"MiningMapView: 无法计算自适应格子大小（容器大小: {containerWidth}x{containerHeight}），使用默认值60x60");
             gridLayout.cellSize = new Vector2(60, 60);
         }
 
-        // 同步迷雾遮罩的布局（FogMaskView 内部可以继续使用 GridLayout 约束）
-        if (fogMaskView != null && gridLayout != null)
+        // 同步迷雾遮罩的布局（目前主要用于层级顺序，对六边形/矩形布局均兼容）
+        if (fogMaskView != null)
         {
             fogMaskView.SyncLayoutWithMiningMap(gridLayout);
         }
@@ -307,34 +463,49 @@ public class MiningMapView : MonoBehaviour
             CalculateCellSize();
         }
 
-        if (gridLayout != null && !gridLayout.enabled)
+        if (!useHexLayout && gridLayout != null && !gridLayout.enabled)
         {
             gridLayout.enabled = true;
         }
+        if (useHexLayout && hexLayout != null && !hexLayout.enabled)
+            hexLayout.enabled = true;
 
-        // 清除旧的瓦片（会同时清除映射）
-        ClearTiles();
-        
-        // 创建新的瓦片
-        for (int y = MiningManager.LAYER_HEIGHT - 1; y >= 0; y--) // 从下往上显示
+        bool staticMode = useStaticCells && mapGridRoot != null && _tileMap.Count > 0;
+
+        if (staticMode)
         {
+            _tileOreIds.Clear();
             for (int x = 0; x < MiningManager.LAYER_WIDTH; x++)
             {
-                CreateTile(x, y, grid[x, y]);
+                for (int y = 0; y < MiningManager.LAYER_HEIGHT; y++)
+                {
+                    Vector2Int pos = new Vector2Int(x, y);
+                    if (!_tileMap.TryGetValue(pos, out GameObject tileObj)) continue;
+                    MiningTileData tileData = grid[x, y];
+                    UpdateTileVisual(tileObj, tileData);
+                    if (tileData.tileType == TileType.Ore && !tileData.isMined)
+                    {
+                        string oreId = GetOreIdFromMineralType(tileData.mineralType);
+                        if (!string.IsNullOrEmpty(oreId))
+                            _tileOreIds[pos] = oreId;
+                    }
+                }
             }
         }
-        
-        // 更新高亮状态
+        else
+        {
+            ClearTiles();
+            for (int y = MiningManager.LAYER_HEIGHT - 1; y >= 0; y--)
+            {
+                for (int x = 0; x < MiningManager.LAYER_WIDTH; x++)
+                    CreateTile(x, y, grid[x, y]);
+            }
+        }
+
         if (enableHighlight)
-        {
             UpdateHighlight();
-        }
-        
-        // 更新迷雾遮罩
         if (fogMaskView != null)
-        {
             fogMaskView.UpdateFog(layerDepth);
-        }
     }
 
     /// <summary>
@@ -346,13 +517,17 @@ public class MiningMapView : MonoBehaviour
 
         if (tilePrefab != null)
         {
-            Transform parent = gridLayout != null ? gridLayout.transform : transform;
+            Transform parent = useHexLayout && hexLayout != null
+                ? hexLayout.transform
+                : (gridLayout != null ? gridLayout.transform : transform);
             tileObj = Instantiate(tilePrefab, parent);
         }
         else
         {
             // 动态创建瓦片
-            Transform parent = gridLayout != null ? gridLayout.transform : transform;
+            Transform parent = useHexLayout && hexLayout != null
+                ? hexLayout.transform
+                : (gridLayout != null ? gridLayout.transform : transform);
             tileObj = new GameObject($"Tile_{x}_{y}");
             tileObj.transform.SetParent(parent, false);
 
@@ -426,12 +601,6 @@ public class MiningMapView : MonoBehaviour
 
         // 更新瓦片显示（这会存储基础颜色）
         UpdateTileVisual(tileObj, tileData);
-
-        // 如果启用六边形布局，手动设置瓦片的局部坐标
-        if (useHexLayout)
-        {
-            PositionTileAsHex(tileObj, x, y);
-        }
     }
 
     /// <summary>
@@ -497,54 +666,6 @@ public class MiningMapView : MonoBehaviour
                 text.text = "";
             }
         }
-    }
-
-    /// <summary>
-    /// 将瓦片按平顶六边形布局定位（odd-r offset）
-    /// </summary>
-    private void PositionTileAsHex(GameObject tileObj, int x, int y)
-    {
-        if (_containerRectTransform == null || gridLayout == null || tileObj == null)
-        {
-            return;
-        }
-
-        RectTransform rect = tileObj.GetComponent<RectTransform>();
-        if (rect == null)
-        {
-            return;
-        }
-
-        // 使用容器自身作为坐标系中心，anchor 设为中心，pivot 为中心
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-
-        Rect containerRect = _containerRectTransform.rect;
-        float w = gridLayout.cellSize.x;
-        float h = gridLayout.cellSize.y;
-
-        // 平顶六边形 odd-r 布局：奇数行在水平方向右移半个单元
-        float horizontalStep = 0.75f * w;
-        float verticalStep = 0.866f * h; // 约等于 sqrt(3)/2
-
-        float offsetXPerRow = (y % 2 == 0) ? 0f : 0.5f * w;
-
-        // 以容器中心为 (0,0)，向右为正 x，向上为正 y（注意 UI 坐标 y 向上为正，但 anchoredPosition.y 向上为正）
-        float logicalX = x * horizontalStep + offsetXPerRow;
-        float logicalY = -y * verticalStep; // 向下排列
-
-        // 将原点平移到容器中心附近，使整张 9×9 地图居中
-        float mapWidth = (MiningManager.LAYER_WIDTH - 1) * horizontalStep + w;
-        float mapHeight = (MiningManager.LAYER_HEIGHT - 1) * verticalStep + h;
-
-        float originX = -mapWidth / 2f + w / 2f;
-        float originY = mapHeight / 2f - h / 2f;
-
-        float finalX = originX + logicalX;
-        float finalY = originY + logicalY;
-
-        rect.anchoredPosition = new Vector2(finalX, finalY);
     }
 
     /// <summary>
@@ -957,10 +1078,16 @@ public class MiningMapView : MonoBehaviour
         }
 
         bool wasGridLayoutEnabled = false;
+        bool wasHexLayoutEnabled = false;
         if (gridLayout != null)
         {
             wasGridLayoutEnabled = gridLayout.enabled;
-            gridLayout.enabled = false; // 暂停布局，避免覆盖位置偏移
+            gridLayout.enabled = false;
+        }
+        if (hexLayout != null)
+        {
+            wasHexLayoutEnabled = hexLayout.enabled;
+            hexLayout.enabled = false; // 暂停六边形布局，避免覆盖晃动偏移
         }
 
         // 保存原始位置和颜色（使用坐标作为key，因为GameObject可能被重建）
@@ -1065,9 +1192,9 @@ public class MiningMapView : MonoBehaviour
         }
 
         if (gridLayout != null)
-        {
-            gridLayout.enabled = wasGridLayoutEnabled; // 恢复布局状态
-        }
+            gridLayout.enabled = wasGridLayoutEnabled;
+        if (hexLayout != null)
+            hexLayout.enabled = wasHexLayoutEnabled;
 
         // 恢复原始位置和颜色（使用坐标从_tileMap重新查找GameObject）
         foreach (var pos in tilePositions)

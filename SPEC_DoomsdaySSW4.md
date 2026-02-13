@@ -1138,7 +1138,7 @@ public enum UpgradeOptionType
   5. **仅当本次选择的选项类型为 `DrillShapeUnlock` 时**，`UpgradeSelectionScreen.OnOptionSelected` 在关闭三选一界面之后，尝试自动打开钻机编辑界面：
      - 通过场景中查找（例如 `FindObjectOfType<DrillEditorScreen>(true)`）获取钻机编辑界面实例 `_drillEditorScreen`；
      - 调用 `_drillEditorScreen.CanEdit()` 判断当前是否允许编辑钻头（例如：未开启自动挖矿，且当前不在“回合结算动画处理中”等状态）；
-     - 若允许编辑，则调用 `_drillEditorScreen.Show()` 打开钻机编辑界面，让玩家立即在 9x9 平台上布置新解锁的造型；
+     - 若允许编辑，则调用 `_drillEditorScreen.Show()` 打开钻机编辑界面，让玩家立即在 9x9 平台上布置新解锁的造型（逻辑尺寸当前依然为 9x9，未来可扩展为 10x10）； 
      - 若当前不允许编辑（如自动挖矿中或回合处理中），则本次不会自动打开，仅记录日志提示，玩家可以稍后通过主界面的“编辑钻头”按钮手动进入。
 - **设计约束**：
   - 该联动逻辑 **只对 `DrillShapeUnlock` 类型生效**，其他数值类升级（如 `DrillStrength`、`MiningEfficiency` 等）不会自动打开钻机编辑界面，以避免频繁打断流程。
@@ -2848,17 +2848,17 @@ UI系统
   - 作为 `DrillEditorScreen` 的子组件，响应其库存选择、已放置造型选择、移动与旋转指令。
 - **关键引用字段**：
   - `gridContainer : RectTransform`  
-    - 必须在 Unity Inspector 中手动绑定到钻机编辑界面下用于承载 9x9 单元格的容器节点（推荐命名：`PlatformGrid`，位于 `DrillEditorPanel` / `DrillEditorScreen` Canvas 层次结构下）；  
+  - 必须在 Unity Inspector 中手动绑定到钻机编辑界面下用于承载平台格子的容器节点（推荐命名：`PlatformGrid`，位于 `DrillEditorPanel` / `DrillEditorScreen` Canvas 层次结构下）；当前美术排布为 **94 个正六边形格子**，但逻辑坐标仍然使用 `DrillPlatformData.PLATFORM_SIZE × DrillPlatformData.PLATFORM_SIZE`（默认 9×9）定义。  
     - 运行时 **禁止为空**：若为空将无法完成格子初始化，`InitGridFromChildren()` 会记录错误日志；  
     - 防御性默认行为：若未在 Inspector 绑定且当前 `GameObject` 本身挂有 `RectTransform`，则在初始化时自动将自身的 `RectTransform` 作为 `gridContainer` 使用，并记录一条调试日志，**仍然强烈建议在预制体/场景上显式绑定正确的容器节点**，避免后续布局结构调整导致平台网格位置异常。
   - `_cellObjects : Dictionary<Vector2Int, GameObject>`  
-    - 键为平台坐标（`(x, y)`，范围 `[0, DrillPlatformData.PLATFORM_SIZE)`，左下角为 `(0,0)`，右上角为 `(8,8)`），值为场景中对应的格子 GameObject；  
-    - 由初始化流程根据 `gridContainer` 下的子节点与其挂载的 `DrillPlatformCell` 数据自动构建。
+  - 键为平台坐标（`(x, y)`，范围 `[0, DrillPlatformData.PLATFORM_SIZE)`，左下角为 `(0,0)`，右上角为 `(DrillPlatformData.PLATFORM_SIZE - 1, DrillPlatformData.PLATFORM_SIZE - 1)`，当前为 `(8,8)`），值为场景中对应的格子 GameObject；  
+  - 由初始化流程根据 `gridContainer` 下的子节点与其挂载的 `DrillPlatformCell` 数据自动构建。
 - **平台格子静态化与布局规范**：
-  - **静态格子设计**：
-    - `DrillEditorPanel/PlatformGrid` 下预先放置 81 个格子子节点，每个子节点代表 9x9 平台中的一个格子；
-    - 每个格子节点都挂载轻量标记组件 `DrillPlatformCell`，内部至少包含其平台坐标信息（`x`, `y` 或 `gridPosition : Vector2Int`），坐标范围为 0~8；
-    - 推荐使用自定义 UI 布局组件 `HexLayoutGroup` 进行正六边形（蜂窝状）排布，也允许继续使用 `GridLayoutGroup` 或手动调整 `RectTransform.anchoredPosition` / `sizeDelta` 以满足美术布局，只要 81 个格子坐标准确覆盖 9x9 全平台即可。
+- **静态格子设计**：
+- `DrillEditorPanel/PlatformGrid` 下预先放置与当前美术布局一致数量的格子子节点；**当前为 94 个正六边形格子**，其中 81 个格子覆盖逻辑 9×9 平台坐标，其余外圈格子仅用于视觉表现（不可放置造型）。未来若通过调整 `PLATFORM_SIZE` 扩展为 10×10、11×11 等，则应同步更新 PlatformGrid 下子节点数量与坐标覆盖范围。 
+    - 每个格子节点都挂载轻量标记组件 `DrillPlatformCell`，内部至少包含其平台坐标信息（`x`, `y` 或 `gridPosition : Vector2Int`），**Inspector 可配置范围为 0~10，用于预留未来更大平台（如 10x10、11x11）扩展空间，但当前逻辑有效范围依然为 `[0, DrillPlatformData.PLATFORM_SIZE)`（即 0~8）**；
+    - 推荐使用自定义 UI 布局组件 `HexLayoutGroup` 进行正六边形（蜂窝状）排布，也允许继续使用 `GridLayoutGroup` 或手动调整 `RectTransform.anchoredPosition` / `sizeDelta` 以满足美术布局，只要 `DrillPlatformData.PLATFORM_SIZE * DrillPlatformData.PLATFORM_SIZE` 个格子坐标准确覆盖当前平台逻辑范围（默认为 9x9）即可。
   - **`HexLayoutGroup` 六边形布局组件（UI）**：
     - **组件用途**：
       - 继承自 `UnityEngine.UI.LayoutGroup`，用于在 Canvas 中对子节点（`RectTransform`）进行正六边形排布，在视觉上形成蜂窝状棋盘；
@@ -2869,6 +2869,7 @@ UI系统
       - `orientation : HexOrientation`（枚举：`PointyTop`, `FlatTop`）：六边形方向，挖矿地图默认使用 `FlatTop`（平顶）；
       - `staggerAxis : HexStaggerAxis`（枚举：`Row`, `Column`）：错列轴（Pointy-top 一般按 `Column` 错列，Flat-top 一般按 `Row` 错列）；
       - `staggerIndex : HexStaggerIndex`（枚举：`Even`, `Odd`）：从偶数行/列开始错列，控制整体对齐风格；
+      - `startCorner : HexLayoutStartCorner`（枚举：`TopLeft`, `BottomLeft`）：布局起点；`TopLeft` 为左上角（row 0 在上），`BottomLeft` 为左下角（row 0 在下）。挖矿地图 MapGridRoot 使用 `BottomLeft`，使 (0,0) 位于左下角；
       - `constraintCount : int`：一行/一列中的单元数量（类似 `GridLayoutGroup.constraintCount`，用于控制“宽度”或“高度”）。
     - **排布规则（示意）**：
       - 内部使用一维索引 `i` 按行优先转换为 `(row, col)`：
@@ -2885,15 +2886,17 @@ UI系统
       - 布局原点与整体对齐由 `LayoutGroup.childAlignment` 决定（如左上、居中等），`HexLayoutGroup` 负责在内部根据该对齐方式整体平移六边形蜂窝。
     - **与逻辑坐标的关系**：
       - UI 六边形布局只影响渲染坐标，不改变钻机平台与矿石系统内部的逻辑网格坐标 `(x, y)` 与存档结构；
-      - 钻机平台依然使用 9×9 的整数坐标 `[0, DrillPlatformData.PLATFORM_SIZE)` 管理格子；`HexLayoutGroup` 仅按照索引顺序将子节点排布成六边形。
+      - 钻机平台依然使用 `DrillPlatformData.PLATFORM_SIZE × DrillPlatformData.PLATFORM_SIZE` 的整数坐标 `[0, DrillPlatformData.PLATFORM_SIZE)` 管理格子；`HexLayoutGroup` 仅按照索引顺序将子节点排布成六边形（当前 `PLATFORM_SIZE = 9`，即为 9×9 平台，未来可扩展为 10x10）。
   - **`DrillPlatformCell` 数据结构（UI 标记组件）**：
-    - 伪代码示例：  
+  - 伪代码示例：  
       ```csharp
       public class DrillPlatformCell : MonoBehaviour
       {
-          [Range(0, DrillPlatformData.PLATFORM_SIZE - 1)]
+          // Inspector 允许配置 0~10，用于预留未来更大平台（10x10、11x11 等）扩展；
+          // 实际逻辑有效范围仍由 DrillPlatformData.PLATFORM_SIZE 决定（当前为 9，对应 0~8）。
+          [Range(0, 10)]
           public int x;
-          [Range(0, DrillPlatformData.PLATFORM_SIZE - 1)]
+          [Range(0, 10)]
           public int y;
 
           public Vector2Int GridPosition => new Vector2Int(x, y);
@@ -2904,7 +2907,7 @@ UI系统
           [HideInInspector] public EventTrigger eventTrigger;
       }
       ```
-    - `DrillPlatformCell` 仅承担“标记 + 坐标”职责，不持有钻头逻辑数据，不参与存档。
+    - `DrillPlatformCell` 仅承担“标记 + 坐标”职责，不持有钻头逻辑数据，不参与存档；当 `x/y` 配置为 9 时，后续以 `DrillPlatformData.IsWithinBounds` 等逻辑为准决定是否视为有效格子。
   - **初始化流程（`InitGridFromChildren()`）**：
     - `Awake()`：获取 `DrillPlatformManager.Instance` 与 `ConfigManager.Instance` 单例；  
     - `Start()`：调用 `InitGridFromChildren()`，从 `gridContainer` 下的子节点收集所有 `DrillPlatformCell` 并构建 `_cellObjects`，然后调用 `Refresh()` 同步显示；
@@ -2933,13 +2936,19 @@ UI系统
       - 确认 `gridContainer` 字段已在 Inspector 中正确拖拽绑定到 `PlatformGrid` 的 RectTransform；  
     - 若运行时报出“重复坐标”或“格子坐标越界”等日志：
       - 在 Unity 层次视图中检查 `PlatformGrid` 下格子节点的 `DrillPlatformCell.x / y` 配置是否有冲突或缺失；
-      - 调整后重新运行，确保 81 个格子覆盖 `(0,0)` 到 `(8,8)` 的所有坐标。
+      - 调整后重新运行，确保 `DrillPlatformData.PLATFORM_SIZE * DrillPlatformData.PLATFORM_SIZE` 个格子覆盖 `(0,0)` 到 `(DrillPlatformData.PLATFORM_SIZE - 1, DrillPlatformData.PLATFORM_SIZE - 1)` 的所有坐标（当前为 `(0,0)` 到 `(8,8)`，若未来扩展为 10x10，则为 `(0,0)` 到 `(9,9)`）。
+      - **开发期结构化调试日志（可选）**：在内部调试会话中，`InitGridFromChildren()` 可以将发现的越界坐标与重复坐标（包括节点名称与已有映射信息）以 NDJSON 形式写入本地调试日志文件，用于精确还原哪个格子/预制体配置有误；该机制仅服务于开发与测试阶段，不改变玩家可见行为，也不会被带入正式发行版本。
+    - 若在初始化阶段检测到 `gridContainer` 下子节点总数与 `DrillPlatformData.PLATFORM_SIZE * DrillPlatformData.PLATFORM_SIZE` 不一致，应记录一条警告日志，帮助美术/关卡设计快速发现预制体配置问题。
+
+  - **调试与验证建议**：
+    - 在编辑器中选择代表左下角与右上角的两个格子，分别配置坐标 `(0,0)` 与 `(DrillPlatformData.PLATFORM_SIZE - 1, DrillPlatformData.PLATFORM_SIZE - 1)`（当前为 `(8,8)`），运行游戏确认不会触发越界日志；
+    - 全量检查 `PlatformGrid` 下子节点的 `DrillPlatformCell.x / y`，确认从 `(0,0)` 到 `(DrillPlatformData.PLATFORM_SIZE - 1, DrillPlatformData.PLATFORM_SIZE - 1)` 间不存在缺失或重复；若有坐标配置为 9，则当前版本中会被边界检查视为越界或忽略，仅作为未来 10x10 扩展的预留配置。
 
 ##### 7.2.1.2 HexLayoutGroup 使用示例
 
 - **在 PlatformGrid 上使用六边形排布**：
-  - 在 `PlatformGrid` 的 `RectTransform` 上添加组件 `HexLayoutGroup`；
-  - 将 81 个格子子节点（挂有 `DrillPlatformCell`）作为 `PlatformGrid` 的直接子节点；
+  - 在 `PlatformGrid` 的 `RectTransform` 上添加组件 `HexLayoutGroup`；若场景中格子实际挂在 **GridRoot**（PlatformGrid 的子节点）下，则将 **HexLayoutGroup** 挂在 **GridRoot** 上。GridRoot 下的格子子节点数量应与实际美术排布一致（当前为 94 个正六边形格子），但其中仅 81 个格子需要映射到逻辑 9×9 平台坐标，其余外圈格子仅参与渲染，不参与逻辑判断。
+  - 将上述所有格子子节点（挂有 `DrillPlatformCell`）作为该布局容器（PlatformGrid 或 GridRoot）的直接子节点，并确保 **子节点在 Hierarchy 中的顺序** 为 row-major：索引 `i` 对应逻辑坐标 `(x, y) = (i % DrillPlatformData.PLATFORM_SIZE, i / DrillPlatformData.PLATFORM_SIZE)`，当前为：第 1 格 (0,0)、第 2 格 (1,0) … 第 9 格 (8,0)、第 10 格 (0,1) … 第 81 格 (8,8)；若未来扩展为 10x10，则为第 1 格 (0,0) … 第 10 格 (9,0)、第 11 格 (0,1) … 第 100 格 (9,9)。
   - 在 `HexLayoutGroup` 中配置：  
     - `cellSize`：例如 `(40, 40)`；  
     - `spacing`：根据美术需求微调（例如 `(2, 2)`）；  
@@ -2947,8 +2956,52 @@ UI系统
     - `staggerAxis`：推荐 `Row`；  
     - `staggerIndex`：根据需要选择 `Odd` 或 `Even`，用于控制哪一行先错列。
 - **与 MiningMapView 的关系**：
-  - 挖矿地图的视觉六边形布局目前由 `MiningMapView.PositionTileAsHex` 手动控制；  
-  - 若未来希望统一使用 `HexLayoutGroup`，可以将 9x9 地图容器改为使用 `HexLayoutGroup`，并删除或精简 `PositionTileAsHex` 相关逻辑。
+  - 挖矿地图的视觉六边形布局已经统一改为使用 `HexLayoutGroup` 控制：`MiningMapContainer` 挂载 `HexLayoutGroup`，9×9 瓦片作为其子节点按 row-major 顺序排列；
+  - `MiningMapView` 负责根据容器尺寸动态计算单元大小，并通过 `HexLayoutGroup.CellSize / Spacing` 驱动六边形蜂窝布局，不再手写 `PositionTileAsHex` 等坐标计算逻辑；
+  - 通过让 `MiningMapContainer` 与 `PlatformGrid` 使用同一套 `HexLayoutGroup` 参数（尤其是 `Orientation = FlatTop`、`StaggerAxis = Row`、`StaggerIndex = Odd`、`ConstraintCountEven/Odd = 9`），保证两者在视觉上保持一致的正六边形对齐方式。
+- **挖矿地图静态格子方案（与 PlatformGrid 一致）**：
+- 可选采用与钻机平台相同的「静态格子 + HexLayoutGroup」方式：在 `MiningMapContainer` 下新增 **MapGridRoot** 节点，在 MapGridRoot 上挂载 **HexLayoutGroup**，参数与钻机平台 **GridRoot** 对齐（FlatTop、Row、Odd、ConstraintCountEven/Odd = 8/9 等），并设置 **StartCorner = BottomLeft**（从左下角开始排布）；**当前美术排布为 94 个正六边形格子**，其中 81 个格子映射到逻辑 9×9 挖矿地图，其余外圈格子仅用于视觉表现。
+  - 每个矿石格子挂载轻量标记组件 **MiningMapCell**，仅标记地图坐标 `(x, y)` 并缓存 `Image`/`Text` 引用，供 `MiningMapView` 遍历与更新显示；用于逻辑计算的格子在 Hierarchy 中按 **row-major** 顺序排列：索引 `i` 对应逻辑坐标 `(x, y) = (i % 9, i / 9)`，即第 1 格 (0,0) 位于**左下角**、第 2 格 (1,0)…第 81 格 (8,8) 位于右上角，外圈仅用于渲染的格子则可以使用越界坐标或单独标记以便在逻辑中忽略。
+  - 当使用静态格子时，`MiningMapView` 在 Start/UpdateMap 时从 MapGridRoot 下 `GetComponentsInChildren<MiningMapCell>` 建立坐标到格子的映射，仅根据当前层 `MiningTileData` 更新每个格子的 `Image.sprite`/`Image.color`、子节点 `TextMeshProUGUI.text` 以及高亮、晃动等逻辑，不再执行 `ClearTiles()` 与 `CreateTile()` 动态创建/销毁。
+  - **MiningMapCell 数据结构**：与 `DrillPlatformCell` 类似，仅承担「标记 + 坐标 + 组件缓存」职责。伪代码示例：
+    ```csharp
+    public class MiningMapCell : MonoBehaviour
+    {
+        [Range(0, 10)] public int x;
+        [Range(0, 10)] public int y;
+        public Vector2Int GridPosition => new Vector2Int(x, y);
+        [HideInInspector] public Image image;
+        [HideInInspector] public TextMeshProUGUI text;
+    }
+    ```
+  - MapGridRoot 的 HexLayoutGroup 参数（CellSize、Spacing、Orientation、StaggerAxis、StaggerIndex、ConstraintCountEven/Odd）应与 GridRoot 保持一致，以便挖矿地图与钻机平台在视觉上完全对齐；**StartCorner** 设为 **BottomLeft**，使布局从左下角开始、(0,0) 显示在左下角、row 增加向上；CellSize/Spacing 可由 `MiningMapView` 在运行时根据容器尺寸自适应写回。
+
+- **钻机平台正六边形布局参数**：
+  - 布局排列由 **GridRoot** 上的 **HexLayoutGroup** 控制，DrillPlatformCell 仅标记坐标 (x,y)，不参与布局计算。
+  - 在 Unity 中选中 **GridRoot**，在 **Hex Layout Group (Script)** 中建议设置：
+    - **Cell Size**：`(40, 40)`（与 DrillPlatformView 的 cellSize 一致，可按视觉微调）；
+    - **Spacing**：`(2, 2)`；
+    - **Orientation**：`FlatTop`（平顶六边形，与挖矿地图一致）；
+    - **Stagger Axis**：`Row`；
+    - **Stagger Index**：`Odd`（奇数行错列，蜂巢对齐正确）；
+    - **Constraint Count Even**：`9`；**Constraint Count Odd**：`9`。
+  - 按上述设置后钻机平台呈正六边形蜂巢；若错位可检查 Stagger Index 与错列偏移（应为步长之半）。
+
+###### 未来从 9x9 扩展到 10x10 的规划（仅设计，不在本次实现）
+
+- 若后续确认需要将钻机平台逻辑升级为 10x10（坐标 0~9），需要统一完成以下改动：
+  - **核心常量与数据结构**：
+    - 将 `DrillPlatformData.PLATFORM_SIZE` 从 `9` 调整为 `10`，逻辑坐标范围变为 `[0, 10)`，右上角示例 `(9,9)`；
+    - 全局搜索所有依赖 `PLATFORM_SIZE` 的逻辑，确认没有硬编码的 `9`、`81`、`(8,8)` 等魔法数字，统一改为基于 `PLATFORM_SIZE` 的计算（如 `PLATFORM_SIZE * PLATFORM_SIZE`、`PLATFORM_SIZE - 1` 等）。
+  - **UI 与布局**：
+    - 在 `PlatformGrid/GridRoot` 下补齐至 `PLATFORM_SIZE * PLATFORM_SIZE = 100` 个格子子节点，并为新增的一圈格子配置正确的 `DrillPlatformCell.x / y`（0~9）；
+    - 确认 `HexLayoutGroup` 的布局参数在 10x10 下仍然视觉合理，如有需要可微调 `cellSize`、`spacing` 等。
+  - **存档与兼容性**：
+    - 为从 9x9 存档迁移到 10x10 设计策略：例如在读档时自动为外围新增的坐标填充为空格子，不改变原有 9x9 区域的布局；
+    - 确认与 `DrillPlatformData` 相关的所有序列化/反序列化代码在扩容后仍能兼容旧存档（必要时增加版本号或迁移步骤）。
+  - **回归测试建议**：
+    - 在 10x10 配置下，重点验证边缘坐标 `(9, y)` 与 `(x, 9)` 的造型放置、移动与旋转逻辑；
+    - 验证与钻头效果范围、挖矿地图映射等功能在扩容后仍按预期工作。
 
 #### 7.2.4 游戏流程设计
 
@@ -3047,20 +3100,23 @@ UI系统
    - 挖掉的矿石立即转化为金钱（根据配置表的价值）
    - 能源矿石累计到能源值，不转化为金钱
    - 挖掘深度（层数）影响矿石类型、硬度和所需额外属性
-   - **挖矿地图尺寸规则**：
-     - **逻辑网格**：每层地图固定为 9 列 × 9 行的离散格点（LAYER_WIDTH = 9, LAYER_HEIGHT = 9），用于存储矿石数据和挖掘结果。
-     - **视觉布局**：在 UI 层以**平顶六边形（flat-top）瓦片**的方式排列上述 9×9 逻辑格点，形成蜂窝状棋盘效果，而不再是简单的正方形棋盘。
+  - **挖矿地图尺寸与六边形布局规则**：
+     - **逻辑网格**：每层地图固定为 9 列 × 9 行的离散格点（`LAYER_WIDTH = 9`, `LAYER_HEIGHT = 9`），用于存储矿石数据和挖掘结果。
+     - **视觉布局组件**：在 UI 层统一使用 `HexLayoutGroup` 组件将上述 9×9 逻辑格点排布为平顶六边形蜂窝，而不再由手写函数直接计算 anchoredPosition。
+       - 推荐采用与 PlatformGrid 一致的**静态格子**方案：在 `MiningMapContainer` 下增加 **MapGridRoot** 节点，在 MapGridRoot 上挂载 `HexLayoutGroup`，其关键参数与钻机平台 **GridRoot** 上的 `HexLayoutGroup` 保持一致，并设置**从左下角开始**：
+         - `Orientation = FlatTop`（平顶六边形）；
+         - `StaggerAxis = Row`；
+         - `StaggerIndex = Odd`（奇数行错列）；
+         - `ConstraintCountEven = 9`，`ConstraintCountOdd = 9`；
+         - `StartCorner = BottomLeft`（布局从左下角开始，(0,0) 位于左下角，row 增加向上）；
+         - `CellSize` 与 `Spacing` 由 `MiningMapView` 在运行时根据容器大小自适应计算，并回写到 `HexLayoutGroup.CellSize / Spacing`。
+       - 所有 9×9 矿石格子 GameObject 作为 MapGridRoot（即 `HexLayoutGroup` 所在节点）的直接子节点，每个挂载 **MiningMapCell** 并按照 row-major 顺序排列：索引 `i` 对应逻辑坐标 `(x, y) = (i % 9, i / 9)`，(0,0) 显示在左下角。若使用动态创建模式，则仍由 `MiningMapView` 在运行时生成子节点并保持相同顺序。
      - **中心点**：钻头的逻辑中心点位置默认仍为每层地图的中心点 `(4, 4)`，六边形布局仅影响渲染坐标，不改变逻辑坐标与存档结构。
-     - **坐标映射规则（奇行偏移 odd-r offset）**：
-       - 使用 `(x, y)` 作为逻辑网格坐标，其中 `x ∈ [0,8]`、`y ∈ [0,8]`，`y = 0` 为最上方一行。
-       - 将 `(x, y)` 映射为屏幕局部坐标时，采用**奇数行右偏移**的平顶六边形布局：
-         - 设单格宽度为 `w`、高度为 `h`，则水平方向中心间距约为 `w * 0.75`，竖直方向中心间距约为 `h * 0.866`。
-         - 对于第 `y` 行，如果 `y` 为奇数，则在水平方向额外右移 `w * 0.5`，否则不偏移。
-         - UI 中最终局部坐标近似为：
-           - \( x_{\text{screen}} = (x \times 0.75w + (y \bmod 2) \times 0.5w) + x_{\text{offset}} \)
-           - \( y_{\text{screen}} = (y \times 0.866h) + y_{\text{offset}} \)
-       - `x_offset` / `y_offset` 由 `MiningMapView` 根据容器大小自适应计算，保证整张 9×9 六边形地图完整显示在左侧面板中。
-     - 地图尺寸仍由常量定义，不可动态修改，如需扩展层宽/高，应同时更新逻辑网格与六边形映射规则。
+     - **坐标映射语义（奇行偏移 odd-r offset）**：
+       - 语义上仍然采用平顶六边形 odd-r 布局：使用 `(x, y)` 作为逻辑网格坐标，其中 `x ∈ [0,8]`、`y ∈ [0,8]`，`y = 0` 为最上方一行；
+       - 单格宽度为 `w`、高度为 `h` 时，水平方向中心间距约为 `w * 0.75`，竖直方向中心间距约为 `h * 0.866`，奇数行在水平方向额外右移约 `0.5w`；
+       - 这些几何关系由 `HexLayoutGroup` 内部实现，`MiningMapView` 只负责提供合适的 `CellSize / Spacing`，不再直接计算具体像素坐标。
+     - 地图尺寸仍由常量定义，不可动态修改，如需扩展层宽/高，应同时更新逻辑网格与 `HexLayoutGroup` 的约束参数。
    - **挖矿地图高亮规则**：
      - 在挖矿地图上，根据钻头的攻击范围进行视觉高亮显示
      - 高亮规则：在钻头攻击范围内的格子会高亮显示（混合淡黄色，30%混合度）

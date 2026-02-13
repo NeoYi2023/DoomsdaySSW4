@@ -390,15 +390,6 @@ public class EnergyUpgradeManager : MonoBehaviour
 
         _energyData.upgrades.Add(upgrade);
 
-        // #region agent log
-        try
-        {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.SelectUpgrade\",\"message\":\"SelectUpgrade called\",\"data\":{\"optionType\":\"" + option.type + "\",\"upgradeId\":\"" + (option.upgradeId ?? "") + "\",\"currentEnergy\":" + _energyData.currentEnergy + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
-
         // 应用升级效果
         ApplyUpgradeEffect(option);
 
@@ -413,15 +404,6 @@ public class EnergyUpgradeManager : MonoBehaviour
         DrillManager drillManager = DrillManager.Instance;
         DrillPlatformManager platformManager = DrillPlatformManager.Instance;
         DrillData drill = drillManager.GetCurrentDrill();
-
-        // #region agent log
-        try
-        {
-            var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-2\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.ApplyUpgradeEffect\",\"message\":\"ApplyUpgradeEffect enter\",\"data\":{\"optionType\":\"" + option.type + "\",\"upgradeId\":\"" + (option.upgradeId ?? "") + "\",\"platformManagerNull\":" + (platformManager == null ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-            File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-        }
-        catch { }
-        // #endregion
 
         switch (option.type)
         {
@@ -462,39 +444,11 @@ public class EnergyUpgradeManager : MonoBehaviour
                 // 通过升级解锁新的钻头造型：约定 upgradeId 即 shapeId
                 if (platformManager != null && !string.IsNullOrEmpty(option.upgradeId))
                 {
-                    // #region agent log
-                    try
-                    {
-                        var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-2\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.ApplyUpgradeEffect\",\"message\":\"DrillShapeUnlock condition passed\",\"data\":{\"shapeId\":\"" + option.upgradeId + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                        File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-                    }
-                    catch { }
-                    // #endregion
-
                     platformManager.AddShapeToInventory(option.upgradeId);
-                    
-                    // #region agent log
-                    try
-                    {
-                        var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-1\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.ApplyUpgradeEffect\",\"message\":\"Apply DrillShapeUnlock\",\"data\":{\"shapeId\":\"" + option.upgradeId + "\"},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                        File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-                    }
-                    catch { }
-                    // #endregion
-
                     Debug.Log($"解锁钻头造型: {option.upgradeId}，已加入当前关卡钻机平台库存");
                 }
                 else
                 {
-                    // #region agent log
-                    try
-                    {
-                        var log = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix-2\",\"hypothesisId\":\"H1\",\"location\":\"EnergyUpgradeManager.ApplyUpgradeEffect\",\"message\":\"DrillShapeUnlock condition failed\",\"data\":{\"platformManagerNull\":" + (platformManager == null ? "true" : "false") + ",\"upgradeIdNullOrEmpty\":" + (string.IsNullOrEmpty(option.upgradeId) ? "true" : "false") + "},\"timestamp\":" + System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}";
-                        File.AppendAllText("e:\\Work\\Cursor\\DoomsdaySSW4\\.cursor\\debug.log", log + System.Environment.NewLine);
-                    }
-                    catch { }
-                    // #endregion
-
                     Debug.LogWarning($"尝试解锁钻头造型失败，upgradeId 无效: {option.upgradeId}");
                 }
                 break;

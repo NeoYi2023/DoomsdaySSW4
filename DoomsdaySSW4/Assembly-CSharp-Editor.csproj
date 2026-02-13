@@ -65,6 +65,7 @@
     <Compile Include="Assets\Editor\ExcelToJsonConverter.cs" />
     <Compile Include="Assets\Editor\OreAssetGenerator.cs" />
     <Compile Include="Assets\Editor\GameRuntimeChecker.cs" />
+    <Compile Include="Assets\Editor\MiningMapGridEditor.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
