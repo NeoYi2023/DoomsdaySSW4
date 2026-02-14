@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Events;
 
 /// <summary>
-/// 钻机平台管理器：管理9x9平台上钻头造型的放置、移除、旋转等操作
+/// 钻机平台管理器：管理钻机平台上钻头造型的放置、移除、旋转等操作（平台逻辑尺寸由 DrillPlatformData.PLATFORM_SIZE×PLATFORM_SIZE 决定，默认 9x9）
 /// </summary>
 public class DrillPlatformManager : MonoBehaviour
 {

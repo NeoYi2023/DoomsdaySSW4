@@ -34,8 +34,8 @@ public class MiningLayerData
 {
     public int layerDepth;                   // 层数（深度）
 
-    // 为了便于序列化，这里使用一维数组模拟 9x9 网格
-    // 网格尺寸在运行时由常量提供
+    // 为了便于序列化，这里使用一维数组模拟逻辑网格（尺寸在运行时由常量提供，例如默认 9x9）
+    // 网格尺寸在运行时由 MiningManager.LAYER_WIDTH / LAYER_HEIGHT 等常量提供
     public List<MiningTileData> tiles = new List<MiningTileData>();
 
     public Vector2Int drillCenter;           // 钻头中心点位置（默认在层中心：4,4）

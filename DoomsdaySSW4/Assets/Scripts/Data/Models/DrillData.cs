@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// 钻头数据（对应 SPEC 3.11 DrillData）
-/// 支持造型系统：通过platformData管理放置在9x9平台上的钻头造型
+/// 支持造型系统：通过 platformData 管理放置在钻机平台上的钻头造型（平台逻辑尺寸由 DrillPlatformData.PLATFORM_SIZE×PLATFORM_SIZE 决定，默认 9x9）
 /// </summary>
 [Serializable]
 public class DrillData
@@ -23,7 +23,7 @@ public class DrillData
     [Obsolete("使用 platformData 替代")]
     public Vector2Int miningRange = new Vector2Int(5, 5); // 挖掘范围（长宽格子数，默认5x5）
     [Obsolete("使用 platformData 替代")]
-    public Vector2Int drillCenter = new Vector2Int(4, 4); // 默认在9x9地图中心
+    public Vector2Int drillCenter = new Vector2Int(4, 4); // 默认在地图中心（当前默认 9x9 配置下为 (4,4)）
 
     // 额外属性（用于挖掘特殊矿石）
     public Dictionary<string, int> additionalAttributes =

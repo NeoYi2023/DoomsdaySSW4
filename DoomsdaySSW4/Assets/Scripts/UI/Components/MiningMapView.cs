@@ -7,15 +7,16 @@ using System.Linq;
 using System;
 
 /// <summary>
-/// 挖矿地图视图：显示挖矿地图（逻辑为 9x9 网格，可在 UI 层通过 HexLayoutGroup 扩展为 94 格正六边形布局）
+/// 挖矿地图视图：显示挖矿地图（逻辑网格尺寸由 MiningManager.LAYER_WIDTH/LAYER_HEIGHT 决定，默认 9x9，可在 UI 层通过 HexLayoutGroup 扩展为蜂窝状布局）
 /// </summary>
 public class MiningMapView : MonoBehaviour
 {
     [Header("地图设置")]
     [SerializeField] private GridLayoutGroup gridLayout;
     [SerializeField] private HexLayoutGroup hexLayout; // 六边形布局组件（与 PlatformGrid 保持一致）
-    [SerializeField] private RectTransform mapGridRoot; // 静态格子容器（MapGridRoot，挂 HexLayoutGroup + 若干 MiningMapCell，支持 81 逻辑格 + 额外装饰格）
+    [SerializeField] private RectTransform mapGridRoot; // 静态格子容器（MapGridRoot，挂 HexLayoutGroup + 若干 MiningMapCell，支持逻辑格 + 额外装饰格）
     [SerializeField] private bool useStaticCells = false; // 为 true 时从 mapGridRoot 子节点初始化格子，不动态创建/销毁
+    [SerializeField] private RectTransform platformGridRoot; // 平台格子容器（PlatformGrid 或其子 GridRoot），用于静态格子对齐
     [SerializeField] private GameObject tilePrefab; // 瓦片预制体（动态创建模式时使用，若为空则代码创建）
     [Header("自适应设置")]
     [SerializeField] private bool autoResize = true; // 是否自动调整大小
@@ -33,6 +34,7 @@ public class MiningMapView : MonoBehaviour
     private RectTransform _containerRectTransform;
     private RectTransform _parentRectTransform;
     private bool _loggedEmptyTileThisUpdate = false;
+    private bool _syncedWithPlatform = false; // 标记是否已成功与平台格子完成世界坐标对齐（对齐后不再由 HexLayoutGroup 自动排布）
     
     [Header("晃动动效设置")]
     [SerializeField] private float shakeDuration = 0.5f; // 晃动持续时间（秒）
@@ -109,7 +111,7 @@ public class MiningMapView : MonoBehaviour
                 // 与 Inspector 中 spacing 保持一致，便于和 PlatformGrid 参数统一
                 hexLayout.Spacing = spacing;
 
-                // 缺省参数设置为 9x9 平顶六边形 odd-r，与 SPEC 中约定保持一致（逻辑 9x9，可在 UI 中扩展为 94 格正六边形）
+                // 缺省参数设置为与逻辑网格宽度一致的平顶六边形 odd-r，与 SPEC 中约定保持一致（逻辑尺寸由 LAYER_WIDTH/LAYER_HEIGHT 决定，默认 9x9，可在 UI 中扩展为蜂窝状布局）
                 if (hexLayout.ConstraintCountEven <= 0) hexLayout.ConstraintCountEven = MiningManager.LAYER_WIDTH;
                 if (hexLayout.ConstraintCountOdd <= 0) hexLayout.ConstraintCountOdd = MiningManager.LAYER_WIDTH;
                 if (hexLayout.Orientation != HexLayoutGroup.HexOrientation.FlatTop)
@@ -148,7 +150,7 @@ public class MiningMapView : MonoBehaviour
             {
                 gridLayout.spacing = spacing;
                 gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-                gridLayout.constraintCount = MiningManager.LAYER_WIDTH; // 9列
+                gridLayout.constraintCount = MiningManager.LAYER_WIDTH; // 列数由 LAYER_WIDTH 决定
 
                 if (!autoResize)
                 {
@@ -171,6 +173,13 @@ public class MiningMapView : MonoBehaviour
             InitTilesFromChildren();
             if (autoResize)
                 CalculateCellSize();
+
+            // 在静态格子方案下，如果绑定了平台格子容器，则在初始化完 MiningMapCell 后尝试根据 DrillPlatformCell 对齐一次位置和尺寸
+            if (platformGridRoot != null)
+            {
+                SyncCellsWithPlatform();
+            }
+
         }
 
         UpdateMap(1);
@@ -189,7 +198,7 @@ public class MiningMapView : MonoBehaviour
         MiningMapCell[] cells = mapGridRoot.GetComponentsInChildren<MiningMapCell>(true);
         if (cells == null || cells.Length == 0)
         {
-            Debug.LogWarning("MiningMapView: mapGridRoot 下未找到 MiningMapCell，请使用编辑器至少生成覆盖 9x9 逻辑网格的格子（可在外圈补充装饰格）或关闭 useStaticCells。");
+            Debug.LogWarning($"MiningMapView: mapGridRoot 下未找到 MiningMapCell，请使用编辑器至少生成覆盖逻辑网格 [0,0]..({MiningManager.LAYER_WIDTH - 1},{MiningManager.LAYER_HEIGHT - 1}) 的格子（可在外圈补充装饰格）或关闭 useStaticCells。");
             return;
         }
 
@@ -216,7 +225,7 @@ public class MiningMapView : MonoBehaviour
         }
 
         if (_tileMap.Count != expectedLogicCount)
-            Debug.LogWarning($"MiningMapView: 参与逻辑的静态格子数量为 {_tileMap.Count}，期望覆盖 {expectedLogicCount} 个逻辑坐标 (0,0)..(8,8)。如使用 94 格正六边形布局，请确保至少 81 个格子映射到 9x9 逻辑网格，其余外圈格子仅作为装饰。");
+            Debug.LogWarning($"MiningMapView: 参与逻辑的静态格子数量为 {_tileMap.Count}，期望覆盖 {expectedLogicCount} 个逻辑坐标 (0,0)..({MiningManager.LAYER_WIDTH - 1},{MiningManager.LAYER_HEIGHT - 1})。如使用多于逻辑格子的正六边形布局，请确保至少 LAYER_WIDTH×LAYER_HEIGHT 个格子映射到逻辑网格，其余外圈格子仅作为装饰。");
     }
 
     /// <summary>
@@ -258,6 +267,10 @@ public class MiningMapView : MonoBehaviour
     /// </summary>
     private void CalculateCellSize()
     {
+        // 已与平台格子完成对齐后，HexLayoutGroup 已禁用，格子尺寸由平台侧驱动，无需再自动计算
+        if (_syncedWithPlatform)
+            return;
+
         RectTransform targetRect = null;
         
         // 决定使用哪个RectTransform的大小
@@ -406,6 +419,218 @@ public class MiningMapView : MonoBehaviour
     }
 
     /// <summary>
+    /// 在静态格子方案下，根据 PlatformGrid 中 DrillPlatformCell 的 RectTransform
+    /// 对 MapGridRoot 下的 MiningMapCell 做一次**几何对齐**（位置 + 尺寸）。
+    /// 设计约定（与 SPEC 保持一致）：
+    /// - 坐标映射：使用 (x,y) 建立 DrillPlatformCell ↔ MiningMapCell 的 1:1 对应关系，
+    ///   逻辑范围为 [0, MiningManager.LAYER_WIDTH) × [0, MiningManager.LAYER_HEIGHT)（当前 9×9，即 [0,8]×[0,8]）；
+    /// - 宽高同步：MiningMapCell 的 RectTransform.sizeDelta 直接拷贝同坐标 DrillPlatformCell 的 sizeDelta，
+    ///   即“挖矿地图格子的 Width/Height 参数由平台格子的 Width/Height 直接驱动”；
+    /// - 中心点语义：要求 platformGridRoot / mapGridRoot 下子格子的 anchor 与 pivot 统一为中心（推荐 (0.5,0.5)），
+    ///   此时复制 anchoredPosition 即可保证两侧格子的几何中心点在父容器空间内完全重合；
+        /// - 若未来启用基于 RectTransform.rect.center + 世界坐标转换的精确中心对齐方案（参见 SPEC 中方案 B），
+        ///   则需要在此处改为通过 TransformPoint / InverseTransformPoint 计算 localPosition，并确保布局组件不再重排子节点；
+        /// - 超出逻辑网格范围的外圈装饰格子不参与同步，仅作为视觉装饰。
+    /// </summary>
+    public void SyncCellsWithPlatform()
+    {
+        // 仅在静态格子 + 参数完整时执行
+        if (!useStaticCells || mapGridRoot == null || platformGridRoot == null)
+        {
+            return;
+        }
+
+        // ── 关键修复：强制 Canvas 立即执行一轮布局重建 ──
+        // 确保平台侧 HexLayoutGroup 已经对子节点执行了 LayoutChildren，
+        // 否则平台格子的 anchoredPosition / sizeDelta 仍为初始零值。
+        Canvas.ForceUpdateCanvases();
+
+        // 收集平台格子
+        DrillPlatformCell[] platformCells = platformGridRoot.GetComponentsInChildren<DrillPlatformCell>(true);
+        if (platformCells == null || platformCells.Length == 0)
+        {
+            Debug.LogWarning("MiningMapView.SyncCellsWithPlatform: 在 platformGridRoot 下未找到 DrillPlatformCell，跳过对齐。");
+            return;
+        }
+
+        int maxX = MiningManager.LAYER_WIDTH;
+        int maxY = MiningManager.LAYER_HEIGHT;
+
+        var platformMap = new Dictionary<Vector2Int, RectTransform>();
+
+        foreach (var cell in platformCells)
+        {
+            if (cell == null) continue;
+            Vector2Int pos = cell.GridPosition;
+
+            if (pos.x < 0 || pos.x >= maxX || pos.y < 0 || pos.y >= maxY)
+                continue;
+
+            RectTransform rect = cell.transform as RectTransform;
+            if (rect == null) continue;
+
+            if (platformMap.ContainsKey(pos))
+            {
+                Debug.LogWarning($"MiningMapView.SyncCellsWithPlatform: 平台侧存在重复坐标 ({pos.x},{pos.y})，节点 {cell.gameObject.name}");
+                continue;
+            }
+
+            platformMap[pos] = rect;
+        }
+
+        if (platformMap.Count == 0)
+        {
+            Debug.LogWarning("MiningMapView.SyncCellsWithPlatform: 未找到任何有效的平台格子坐标，跳过对齐。");
+            return;
+        }
+
+        if (_tileMap == null || _tileMap.Count == 0)
+        {
+            Debug.LogWarning("MiningMapView.SyncCellsWithPlatform: _tileMap 为空，请确认已调用 InitTilesFromChildren 且启用了 useStaticCells。");
+            return;
+        }
+
+        // ── 禁用 MapGridRoot 上的 HexLayoutGroup，防止布局组件在后续帧覆盖手动设置 ──
+        HexLayoutGroup mapHexLayout = mapGridRoot.GetComponent<HexLayoutGroup>();
+        if (mapHexLayout != null)
+        {
+            mapHexLayout.enabled = false;
+        }
+
+        int syncCount = 0;
+        // #region agent log: drill-mining-align-sync
+        try
+        {
+            // 仅用于当前 AI 调试会话的对齐诊断，记录若干关键坐标的世界坐标
+            Vector2Int[] probeCoords = new Vector2Int[]
+            {
+                new Vector2Int(4, 4), // 逻辑中心
+                new Vector2Int(0, 0), // 左下角
+                new Vector2Int(MiningManager.LAYER_WIDTH - 1, 0), // 右下角
+                new Vector2Int(0, MiningManager.LAYER_HEIGHT - 1) // 左上角
+            };
+
+            foreach (var probe in probeCoords)
+            {
+                if (platformMap.TryGetValue(probe, out RectTransform platRect))
+                {
+                    Vector3 platCenterWorld = platRect.TransformPoint(platRect.rect.center);
+                    long ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    string logLine =
+                        "{" +
+                        "\"sessionId\":\"d33074ff-81b8-4f92-a63c-c6ba6401768d\"," +
+                        "\"runId\":\"pre-fix\"," +
+                        "\"hypothesisId\":\"H1_platform_vs_mining_layout\"," +
+                        "\"location\":\"MiningMapView.SyncCellsWithPlatform:platformProbe\"," +
+                        "\"message\":\"Platform cell world center probe\"," +
+                        "\"data\":{" +
+                            "\"gridX\":" + probe.x + "," +
+                            "\"gridY\":" + probe.y + "," +
+                            "\"worldX\":" + platCenterWorld.x.ToString("F4") + "," +
+                            "\"worldY\":" + platCenterWorld.y.ToString("F4") +
+                        "}," +
+                        "\"timestamp\":" + ts +
+                        "}";
+                    System.IO.File.AppendAllText("e:/Work/Cursor/DoomsdaySSW4/debug-d33074ff-81b8-4f92-a63c-c6ba6401768d.log", logLine + "\n");
+                }
+            }
+        }
+        catch { }
+        // #endregion
+
+        foreach (var kvp in _tileMap)
+        {
+            Vector2Int pos = kvp.Key;
+
+            if (pos.x < 0 || pos.x >= maxX || pos.y < 0 || pos.y >= maxY)
+                continue;
+
+            if (!platformMap.TryGetValue(pos, out RectTransform platformRect))
+                continue;
+
+            GameObject miningObj = kvp.Value;
+            if (miningObj == null) continue;
+
+            RectTransform miningRect = miningObj.transform as RectTransform;
+            if (miningRect == null) continue;
+
+            // 方案 B：基于世界坐标中心 + 尺寸对齐
+            // 1. 计算平台格子的世界中心坐标
+            Vector3 worldCenter = platformRect.TransformPoint(platformRect.rect.center);
+            // 2. 转换到 MapGridRoot 的本地坐标
+            Vector3 localCenterInMap = mapGridRoot.InverseTransformPoint(worldCenter);
+            // 3. 设置挖矿格子的本地位置（中心点对齐）
+            miningRect.localPosition = localCenterInMap;
+            // 4. 通过世界空间四角反算在 MapGridRoot 本地空间中的正确尺寸
+            //    （不能直接复制 sizeDelta，因为两个父容器的缩放可能不同）
+            Vector3[] platCorners = new Vector3[4];
+            platformRect.GetWorldCorners(platCorners);
+            // GetWorldCorners: [0]=bottom-left, [1]=top-left, [2]=top-right, [3]=bottom-right
+            Vector3 localBL = mapGridRoot.InverseTransformPoint(platCorners[0]);
+            Vector3 localTR = mapGridRoot.InverseTransformPoint(platCorners[2]);
+            float localWidth = Mathf.Abs(localTR.x - localBL.x);
+            float localHeight = Mathf.Abs(localTR.y - localBL.y);
+            miningRect.sizeDelta = new Vector2(localWidth, localHeight);
+
+            syncCount++;
+        }
+
+        if (syncCount > 0)
+        {
+            _syncedWithPlatform = true;
+            Debug.Log($"MiningMapView.SyncCellsWithPlatform: 已通过世界坐标对齐 {syncCount} 个格子，已禁用 MapGridRoot 的 HexLayoutGroup。");
+
+            // #region agent log: drill-mining-align-synced
+            try
+            {
+                // 对齐完成后，再采样少量格子，比较平台与挖掘格子的世界中心差值
+                Vector2Int[] sampleCoords = new Vector2Int[]
+                {
+                    new Vector2Int(4, 4),
+                    new Vector2Int(2, 2),
+                    new Vector2Int(6, 6)
+                };
+
+                foreach (var coord in sampleCoords)
+                {
+                    if (!platformMap.TryGetValue(coord, out RectTransform platRect)) continue;
+                    if (!_tileMap.TryGetValue(coord, out GameObject miningObj) || miningObj == null) continue;
+
+                    RectTransform miningRect = miningObj.transform as RectTransform;
+                    if (miningRect == null) continue;
+
+                    Vector3 platCenterWorld = platRect.TransformPoint(platRect.rect.center);
+                    Vector3 miningCenterWorld = miningRect.TransformPoint(miningRect.rect.center);
+
+                    long ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    string logLine =
+                        "{" +
+                        "\"sessionId\":\"d33074ff-81b8-4f92-a63c-c6ba6401768d\"," +
+                        "\"runId\":\"pre-fix\"," +
+                        "\"hypothesisId\":\"H1_platform_vs_mining_layout\"," +
+                        "\"location\":\"MiningMapView.SyncCellsWithPlatform:postSyncSample\"," +
+                        "\"message\":\"Post-sync world center diff\"," +
+                        "\"data\":{" +
+                            "\"gridX\":" + coord.x + "," +
+                            "\"gridY\":" + coord.y + "," +
+                            "\"platformWorldX\":" + platCenterWorld.x.ToString("F4") + "," +
+                            "\"platformWorldY\":" + platCenterWorld.y.ToString("F4") + "," +
+                            "\"miningWorldX\":" + miningCenterWorld.x.ToString("F4") + "," +
+                            "\"miningWorldY\":" + miningCenterWorld.y.ToString("F4") + "," +
+                            "\"deltaX\":" + (miningCenterWorld.x - platCenterWorld.x).ToString("F4") + "," +
+                            "\"deltaY\":" + (miningCenterWorld.y - platCenterWorld.y).ToString("F4") +
+                        "}," +
+                        "\"timestamp\":" + ts +
+                        "}";
+                    System.IO.File.AppendAllText("e:/Work/Cursor/DoomsdaySSW4/debug-d33074ff-81b8-4f92-a63c-c6ba6401768d.log", logLine + "\n");
+                }
+            }
+            catch { }
+            // #endregion
+        }
+    }
+
+    /// <summary>
     /// 加载中文字体
     /// </summary>
     private void LoadChineseFont()
@@ -467,7 +692,8 @@ public class MiningMapView : MonoBehaviour
         {
             gridLayout.enabled = true;
         }
-        if (useHexLayout && hexLayout != null && !hexLayout.enabled)
+        // 已与平台对齐时不重新启用 HexLayoutGroup，避免覆盖手动设置的位置/尺寸
+        if (useHexLayout && hexLayout != null && !hexLayout.enabled && !_syncedWithPlatform)
             hexLayout.enabled = true;
 
         bool staticMode = useStaticCells && mapGridRoot != null && _tileMap.Count > 0;

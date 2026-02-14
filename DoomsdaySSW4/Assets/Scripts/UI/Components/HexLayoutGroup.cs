@@ -3,7 +3,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// UI 六边形布局组件：在 Canvas 中将子节点（RectTransform）排布为正六边形蜂窝状。
-/// 设计目标：作为 GridLayoutGroup 的“六边形版本”，用于 9x9 等规则网格的视觉排布。
+/// 设计目标：作为 GridLayoutGroup 的“六边形版本”，用于规则逻辑网格（例如默认 9x9，可扩展）的视觉排布。
 /// </summary>
 [AddComponentMenu("Layout/Hex Layout Group")]
 public class HexLayoutGroup : LayoutGroup

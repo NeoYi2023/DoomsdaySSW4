@@ -10,8 +10,8 @@ public class ShipInitialDrillConfig
 {
     public string shipId;           // 船只ID
     public string shapeId;          // 造型ID
-    public int positionX;           // 在9x9平台上的X坐标（0-8）
-    public int positionY;           // 在9x9平台上的Y坐标（0-8）
+    public int positionX;           // 在平台上的X坐标（有效范围由 DrillPlatformData.PLATFORM_SIZE 决定，默认 9x9 配置下为 0-8）
+    public int positionY;           // 在平台上的Y坐标（有效范围由 DrillPlatformData.PLATFORM_SIZE 决定，默认 9x9 配置下为 0-8）
     public int rotation;            // 旋转角度（0/90/180/270）
     
     /// <summary>

@@ -136,7 +136,7 @@ public class FogMaskView : MonoBehaviour
         _fogMaterial = new Material(fogMaskShader);
         _fogImage.material = _fogMaterial;
         
-        // 初始化攻击范围纹理（9x9，每个像素代表一个格子）
+        // 初始化攻击范围纹理（尺寸与逻辑网格一致，每个像素代表一个格子，例如默认 9x9）
         _attackRangeTexture = new Texture2D(MiningManager.LAYER_WIDTH, MiningManager.LAYER_HEIGHT, TextureFormat.R8, false);
         _attackRangeTexture.filterMode = FilterMode.Point; // 使用点过滤，确保精确的像素对应
         _attackRangeTexture.wrapMode = TextureWrapMode.Clamp;

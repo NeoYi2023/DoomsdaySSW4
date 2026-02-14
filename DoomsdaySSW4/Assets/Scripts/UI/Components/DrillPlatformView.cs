@@ -2,12 +2,10 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
-using System;
 using System.Collections.Generic;
-using System.IO;
 
 /// <summary>
-/// 钻机平台视图：显示9x9的钻机平台网格和已放置的造型，
+/// 钻机平台视图：显示逻辑平台网格（由 DrillPlatformData.PLATFORM_SIZE×PLATFORM_SIZE 决定，默认 9x9）和已放置的造型，
 /// 支持鼠标左键拖动放置/移动造型，以及右键旋转选中造型。
 /// </summary>
 public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler, IPointerClickHandler
@@ -60,7 +58,8 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     }
 
     /// <summary>
-    /// 从 gridContainer 子节点初始化9x9静态网格
+    /// 从 gridContainer 子节点初始化静态网格：直接以 DrillPlatformCell.GridPosition 为平台坐标构建 _cellObjects，
+    /// 与 PlatformGrid 中配置的坐标完全一致，不根据 Canvas 位置推断。
     /// </summary>
     private void InitGridFromChildren()
     {
@@ -82,12 +81,8 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
 
         _cellObjects.Clear();
 
-        // ====================================================================
-        // 自动从 sibling 顺序计算 row-major 坐标（不依赖 Inspector 序列化的 x/y），
-        // 只处理前 PLATFORM_SIZE×PLATFORM_SIZE 个格子，多余的外圈装饰格子自动跳过。
-        // ====================================================================
         int size = DrillPlatformData.PLATFORM_SIZE;
-        int maxLogicCells = size * size; // 9×9 = 81
+        int maxLogicCells = size * size;
 
         // 定位实际的格子容器：如果 gridContainer 只有 1 个子节点（GridRoot），则进入它
         Transform cellContainer = gridContainer;
@@ -100,43 +95,28 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             }
         }
 
-        int totalChildren = cellContainer.childCount;
-        if (totalChildren == 0)
+        DrillPlatformCell[] allCells = cellContainer.GetComponentsInChildren<DrillPlatformCell>(true);
+        if (allCells == null || allCells.Length == 0)
         {
-            Debug.LogError("DrillPlatformView: 在 gridContainer 下未找到任何子节点，请在 PlatformGrid 下布置 9x9 格子并挂载 DrillPlatformCell 组件。");
+            Debug.LogError("DrillPlatformView: 未找到任何 DrillPlatformCell，请检查 PlatformGrid 配置。");
             return;
         }
 
-        int logicIdx = 0; // 逻辑格子计数（用于计算 row-major 坐标）
-        for (int i = 0; i < totalChildren; i++)
+        foreach (DrillPlatformCell cell in allCells)
         {
-            Transform childTransform = cellContainer.GetChild(i);
-            if (childTransform == null) continue;
+            Vector2Int pos = cell.GridPosition;
 
-            // 跳过FogMaskContainer及其子节点
-            if (childTransform.name == "FogMaskContainer" || childTransform.name.Contains("FogTile_"))
+            if (pos.x < 0 || pos.x >= size || pos.y < 0 || pos.y >= size)
             {
+                Debug.LogWarning($"DrillPlatformView: 跳过越界格子 ({pos.x},{pos.y})，节点 {cell.gameObject.name}，有效范围为 [0,{size})。");
                 continue;
             }
 
-            DrillPlatformCell cell = childTransform.GetComponent<DrillPlatformCell>();
-            if (cell == null) continue;
-
-            // 超过 81 个逻辑格子的为外圈装饰格子，跳过
-            if (logicIdx >= maxLogicCells)
+            if (_cellObjects.ContainsKey(pos))
             {
-                logicIdx++;
+                Debug.LogWarning($"DrillPlatformView: 跳过重复坐标 ({pos.x},{pos.y})，节点 {cell.gameObject.name}。");
                 continue;
             }
-
-            // 从 sibling 顺序自动计算 row-major 坐标：row 0 在下，row 8 在上
-            int col = logicIdx % size;
-            int row = logicIdx / size;
-            Vector2Int pos = new Vector2Int(col, row);
-
-            // 将正确坐标写回组件，修正 Inspector 中的错误值
-            cell.x = col;
-            cell.y = row;
 
             GameObject cellObj = cell.gameObject;
 
@@ -192,12 +172,11 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             trigger.triggers.Add(exitEntry);
 
             _cellObjects[pos] = cellObj;
-            logicIdx++;
         }
 
         if (_cellObjects.Count < maxLogicCells)
         {
-            Debug.LogWarning($"DrillPlatformView: 有效逻辑格子数量不足 ({_cellObjects.Count}/{maxLogicCells})，请检查 PlatformGrid 下是否有足够的 DrillPlatformCell 子节点。");
+            Debug.LogWarning($"DrillPlatformView: 参与逻辑的平台格子数量不足 ({_cellObjects.Count}/{maxLogicCells})，请检查 PlatformGrid 中 DrillPlatformCell 的坐标配置是否覆盖 (0,0)..({size - 1},{size - 1})。");
         }
 
         Refresh();
@@ -330,7 +309,6 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     }
 
     #region 指针事件（拖拽与右键旋转）
-
     public void OnPointerDown(PointerEventData eventData)
     {
         if (eventData.button != PointerEventData.InputButton.Left) return;

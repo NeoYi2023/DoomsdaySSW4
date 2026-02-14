@@ -4,13 +4,13 @@ using UnityEngine;
 
 /// <summary>
 /// 钻机平台数据
-/// 管理9x9平台上所有已放置的造型和可用的造型库存
+/// 管理平台上所有已放置的造型和可用的造型库存，平台逻辑尺寸由 PLATFORM_SIZE×PLATFORM_SIZE 决定（默认 9×9，可通过常量调整）
 /// </summary>
 [Serializable]
 public class DrillPlatformData
 {
     /// <summary>
-    /// 平台尺寸（9x9）
+    /// 平台尺寸（PLATFORM_SIZE×PLATFORM_SIZE，默认 9x9，可通过常量调整）
     /// </summary>
     public const int PLATFORM_SIZE = 9;
     

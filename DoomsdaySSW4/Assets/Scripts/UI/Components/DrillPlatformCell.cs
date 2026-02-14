@@ -4,7 +4,7 @@ using UnityEngine.EventSystems;
 
 /// <summary>
 /// 钻机平台单元格标记组件：
-/// - 仅用于标记该格子在 9x9 平台中的坐标
+/// - 仅用于标记该格子在钻机平台逻辑网格中的坐标（逻辑尺寸由 DrillPlatformData.PLATFORM_SIZE×PLATFORM_SIZE 决定，默认 9x9）
 /// - 可选缓存 Image / Button / EventTrigger 引用，减少运行时 GetComponent 调用
 /// - 不参与存档与钻头逻辑，仅为 UI 层服务
 /// </summary>

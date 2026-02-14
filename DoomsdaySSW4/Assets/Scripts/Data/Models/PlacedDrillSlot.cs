@@ -13,7 +13,7 @@ public class PlacedDrillSlot
     public string slotId;
     
     /// <summary>
-    /// 在9x9平台上的绝对位置
+    /// 在平台上的绝对位置（坐标范围由 DrillPlatformData.PLATFORM_SIZE 决定，默认 9x9 配置下为 0~8）
     /// </summary>
     public Vector2Int platformPosition;
     

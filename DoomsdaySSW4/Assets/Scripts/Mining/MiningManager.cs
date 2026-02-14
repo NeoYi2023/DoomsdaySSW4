@@ -23,7 +23,7 @@ public class MiningManager : MonoBehaviour
         }
     }
 
-    // 地图尺寸常量
+    // 地图尺寸常量（逻辑网格宽高，可通过修改常量扩展；默认 9×9）
     public const int LAYER_WIDTH = 9;
     public const int LAYER_HEIGHT = 9;
 
@@ -99,7 +99,8 @@ public class MiningManager : MonoBehaviour
         {
             layerDepth = layerDepth,
             tiles = new List<MiningTileData>(),
-            drillCenter = new Vector2Int(4, 4) // 9x9的中心点
+            // 默认钻头中心点：当前层逻辑网格的中心
+            drillCenter = new Vector2Int(LAYER_WIDTH / 2, LAYER_HEIGHT / 2)
         };
 
         // 获取该层的矿石生成规则

@@ -3381,6 +3381,7 @@ MonoBehaviour:
   hexLayout: {fileID: 0}
   mapGridRoot: {fileID: 1942184151}
   useStaticCells: 1
+  platformGridRoot: {fileID: 1013120790}
   tilePrefab: {fileID: 0}
   autoResize: 1
   spacing: {x: 5, y: 5}
@@ -15088,6 +15089,7 @@ MonoBehaviour:
   hexLayout: {fileID: 0}
   mapGridRoot: {fileID: 0}
   useStaticCells: 0
+  platformGridRoot: {fileID: 0}
   tilePrefab: {fileID: 0}
   autoResize: 1
   spacing: {x: 5, y: 5}
