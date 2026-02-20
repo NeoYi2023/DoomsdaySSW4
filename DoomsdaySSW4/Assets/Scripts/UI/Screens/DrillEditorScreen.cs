@@ -18,7 +18,8 @@ public class DrillEditorScreen : MonoBehaviour
     [SerializeField] private Button clearButton;
     [SerializeField] private Button rotateLeftButton;
     [SerializeField] private Button rotateRightButton;
-    [SerializeField] private Button saveButton;          // 新增：保存当前平台布局但不关闭界面
+    [SerializeField] private Button saveButton;
+    [SerializeField] private Button definePivotButton;
     
     [Header("信息显示")]
     [SerializeField] private TextMeshProUGUI selectedShapeText;
@@ -31,6 +32,7 @@ public class DrillEditorScreen : MonoBehaviour
     private string _pendingShapeId; // 从库存拖出准备放置的造型ID
     private int _pendingShapeRotation; // 待放置造型的旋转角度（0/60/120/180/240/300）
     private bool _isDraggingFromInventory; // 是否正从库存拖拽造型
+    private bool _isDefiningPivot; // 是否处于旋转中心设置模式
     private void Awake()
     {
         _platformManager = DrillPlatformManager.Instance;
@@ -81,6 +83,11 @@ public class DrillEditorScreen : MonoBehaviour
         if (saveButton != null)
         {
             saveButton.onClick.AddListener(OnSaveClicked);
+        }
+
+        if (definePivotButton != null)
+        {
+            definePivotButton.onClick.AddListener(OnDefinePivotClicked);
         }
     }
 
@@ -139,7 +146,14 @@ public class DrillEditorScreen : MonoBehaviour
         RefreshViews();
         ClearSelection();
         
-        UpdateStatusText("点击平台上的造型可选中，点击库存中的造型可放置");
+        if (_platformManager != null && _platformManager.GetPendingSlotCount() > 0)
+        {
+            UpdateStatusText("您有待放置的插槽，请点击一个无插槽的造型格子放置");
+        }
+        else
+        {
+            UpdateStatusText("点击平台上的造型可选中，点击库存中的造型可放置");
+        }
         
         // 应用动态字体
         ApplyDynamicFont();
@@ -150,12 +164,13 @@ public class DrillEditorScreen : MonoBehaviour
     /// </summary>
     public void Hide()
     {
+        ExitPivotMode();
+
         if (panel != null)
         {
             panel.SetActive(false);
         }
         
-        // 恢复挖矿地图的视觉旋转
         MiningMapView miningMapView = FindObjectOfType<MiningMapView>();
         if (miningMapView != null)
         {
@@ -231,10 +246,29 @@ public class DrillEditorScreen : MonoBehaviour
     }
 
     /// <summary>
-    /// 尝试在指定位置放置造型
+    /// 尝试在指定位置放置造型或放置插槽（有待放置插槽时优先放置插槽）
     /// </summary>
     public void TryPlaceAtPosition(Vector2Int position)
     {
+        int pendingSlots = _platformManager != null ? _platformManager.GetPendingSlotCount() : 0;
+        if (pendingSlots > 0)
+        {
+            AddSlotResult slotResult = _platformManager.TryAddSlotAt(position);
+            if (slotResult.success)
+            {
+                UpdateStatusText("插槽已放置");
+                RefreshViews();
+                return;
+            }
+            UpdateStatusText(slotResult.errorMessage ?? "请点击已放置造型上且尚无插槽的格子");
+            PlacedDrillShape existingShape = _platformManager.GetShapeAtPosition(position);
+            if (existingShape != null)
+            {
+                SelectPlacedShape(existingShape);
+            }
+            return;
+        }
+
         if (string.IsNullOrEmpty(_pendingShapeId))
         {
             // 如果没有待放置的造型，检查是否点击了已有造型
@@ -300,10 +334,33 @@ public class DrillEditorScreen : MonoBehaviour
         }
     }
 
+    private void OnDefinePivotClicked()
+    {
+        _isDefiningPivot = true;
+        ClearSelection();
+
+        if (platformView != null)
+        {
+            platformView.SetPivotMode(true);
+        }
+
+        UpdateStatusText("拖动黄色格子设置旋转中心，完成后点击保存");
+    }
+
+    private void ExitPivotMode()
+    {
+        if (!_isDefiningPivot) return;
+        _isDefiningPivot = false;
+
+        if (platformView != null)
+        {
+            platformView.SetPivotMode(false);
+        }
+    }
+
     private void OnConfirmClicked()
     {
-        // 确认更改，关闭界面
-        _backupData = null; // 清除备份，不再需要
+        _backupData = null;
         Hide();
         
         Debug.Log("钻机编辑确认");
@@ -384,8 +441,9 @@ public class DrillEditorScreen : MonoBehaviour
             return;
         }
 
-        // 深拷贝一份当前平台数据到钻头数据中
         drill.platformData = currentData.Clone();
+
+        ExitPivotMode();
 
         UpdateStatusText("当前钻机平台布局已保存");
         Debug.Log("钻机平台布局已保存到当前钻头数据（保持编辑界面打开）");
@@ -519,6 +577,14 @@ public class DrillEditorScreen : MonoBehaviour
     public bool IsDraggingFromInventory()
     {
         return _isDraggingFromInventory;
+    }
+
+    /// <summary>
+    /// 获取当前是否处于旋转中心设置模式
+    /// </summary>
+    public bool IsDefiningPivot()
+    {
+        return _isDefiningPivot;
     }
 
     private void Update()

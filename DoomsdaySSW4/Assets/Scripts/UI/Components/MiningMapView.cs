@@ -7,7 +7,7 @@ using System.Linq;
 using System;
 
 /// <summary>
-/// 挖矿地图视图：显示挖矿地图（逻辑网格尺寸由 MiningManager.LAYER_WIDTH/LAYER_HEIGHT 决定，默认 9x9，可在 UI 层通过 HexLayoutGroup 扩展为蜂窝状布局）
+/// 挖矿地图视图：显示挖矿地图（逻辑网格尺寸由 MiningManager.LAYER_WIDTH/LAYER_HEIGHT 决定，默认 9x11，可在 UI 层通过 HexLayoutGroup 扩展为蜂窝状布局）
 /// </summary>
 public class MiningMapView : MonoBehaviour
 {
@@ -139,7 +139,7 @@ public class MiningMapView : MonoBehaviour
                 // 与 Inspector 中 spacing 保持一致，便于和 PlatformGrid 参数统一
                 hexLayout.Spacing = spacing;
 
-                // 缺省参数设置为与逻辑网格宽度一致的平顶六边形 odd-r，与 SPEC 中约定保持一致（逻辑尺寸由 LAYER_WIDTH/LAYER_HEIGHT 决定，默认 9x9，可在 UI 中扩展为蜂窝状布局）
+                // 缺省参数设置为与逻辑网格宽度一致的平顶六边形 odd-r，与 SPEC 中约定保持一致（逻辑尺寸由 LAYER_WIDTH/LAYER_HEIGHT 决定，默认 9x11，可在 UI 中扩展为蜂窝状布局）
                 if (hexLayout.ConstraintCountEven <= 0) hexLayout.ConstraintCountEven = MiningManager.LAYER_WIDTH;
                 if (hexLayout.ConstraintCountOdd <= 0) hexLayout.ConstraintCountOdd = MiningManager.LAYER_WIDTH;
                 if (hexLayout.Orientation != HexLayoutGroup.HexOrientation.FlatTop)
@@ -457,7 +457,7 @@ public class MiningMapView : MonoBehaviour
     /// 对 MapGridRoot 下的 MiningMapCell 做一次**几何对齐**（位置 + 尺寸）。
     /// 设计约定（与 SPEC 保持一致）：
     /// - 坐标映射：使用 (x,y) 建立 DrillPlatformCell ↔ MiningMapCell 的 1:1 对应关系，
-    ///   逻辑范围为 [0, MiningManager.LAYER_WIDTH) × [0, MiningManager.LAYER_HEIGHT)（当前 9×9，即 [0,8]×[0,8]）；
+    ///   逻辑范围为 [0, MiningManager.LAYER_WIDTH) × [0, MiningManager.LAYER_HEIGHT)（当前 9×11，即 [0,8]×[0,10]）；
     /// - 宽高同步：MiningMapCell 的 RectTransform.sizeDelta 直接拷贝同坐标 DrillPlatformCell 的 sizeDelta，
     ///   即“挖矿地图格子的 Width/Height 参数由平台格子的 Width/Height 直接驱动”；
     /// - 中心点语义：要求 platformGridRoot / mapGridRoot 下子格子的 anchor 与 pivot 统一为中心（推荐 (0.5,0.5)），

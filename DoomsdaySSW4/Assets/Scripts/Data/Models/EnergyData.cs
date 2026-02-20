@@ -49,6 +49,7 @@ public enum UpgradeOptionType
     OreValueBoost,      // 矿石价值提升
     DrillShapeUnlock,   // 解锁钻头造型（将指定造型加入当前关卡可用库存）
     DrillPlatformUpgrade,  // 钻机平台升级（提升基础强度或增加插槽）
+    DrillSlotAdd,       // 增加插槽（待放置插槽+1，需在编辑界面点击无插槽的造型格子放置）
     DrillBitUnlock      // 解锁新钻头
 }
 

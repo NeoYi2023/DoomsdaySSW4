@@ -4,15 +4,15 @@ using UnityEngine;
 
 /// <summary>
 /// 钻机平台数据
-/// 管理平台上所有已放置的造型和可用的造型库存，平台逻辑尺寸由 PLATFORM_SIZE×PLATFORM_SIZE 决定（默认 9×9，可通过常量调整）
+/// 管理平台上所有已放置的造型和可用的造型库存，平台逻辑尺寸由 PLATFORM_SIZE×PLATFORM_SIZE 决定（默认 11×11，可通过常量调整）
 /// </summary>
 [Serializable]
 public class DrillPlatformData
 {
     /// <summary>
-    /// 平台尺寸（PLATFORM_SIZE×PLATFORM_SIZE，默认 9x9，可通过常量调整）
+    /// 平台尺寸（PLATFORM_SIZE×PLATFORM_SIZE，默认 9x11，可通过常量调整）
     /// </summary>
-    public const int PLATFORM_SIZE = 9;
+    public const int PLATFORM_SIZE = 11;
     
     /// <summary>
     /// 已放置的造型列表
@@ -35,9 +35,14 @@ public class DrillPlatformData
     public List<PlacedDrillBit> insertedBits = new List<PlacedDrillBit>();
     
     /// <summary>
-    /// 旋转挖掘中心点（可在钻头编辑界面调整，默认 (4,5)）
+    /// 待放置插槽数量（本关通过三选一“增加插槽”获得、尚未在编辑界面放置的数量）。选择 DrillSlotAdd 时 +1，在编辑界面点击无插槽的造型格子成功放置时 -1。
     /// </summary>
-    public Vector2Int rotationCenter = new Vector2Int(4, 5);
+    public int pendingSlotCount;
+    
+    /// <summary>
+    /// 旋转挖掘中心点（可在钻头编辑界面调整，默认为中心点 (5,5)）
+    /// </summary>
+    public Vector2Int rotationCenter = new Vector2Int(PLATFORM_SIZE / 2, PLATFORM_SIZE / 2);
     
     /// <summary>
     /// 获取平台上所有被占用的格子坐标
@@ -228,6 +233,7 @@ public class DrillPlatformData
     {
         DrillPlatformData clone = new DrillPlatformData();
         clone.rotationCenter = this.rotationCenter;
+        clone.pendingSlotCount = this.pendingSlotCount;
         clone.availableShapeIds = new List<string>(this.availableShapeIds);
         
         foreach (var shape in this.placedShapes)

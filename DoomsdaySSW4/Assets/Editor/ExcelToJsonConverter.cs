@@ -724,6 +724,36 @@ public class ExcelToJsonConverter : EditorWindow
                     shape.traits = new List<ShapeTraitConfigJson>();
                 }
 
+                // 解析slots字段（格式：x,y,Single,slotId;x,y,Quad,）
+                string slotsStr = GetString(row, "slots");
+                if (!string.IsNullOrEmpty(slotsStr))
+                {
+                    List<DrillSlotConfigJson> slots = new List<DrillSlotConfigJson>();
+                    string[] slotSegments = slotsStr.Split(';');
+                    foreach (string segment in slotSegments)
+                    {
+                        string trimmed = segment.Trim();
+                        if (string.IsNullOrEmpty(trimmed)) continue;
+                        string[] parts = trimmed.Split(',');
+                        if (parts.Length >= 3 &&
+                            int.TryParse(parts[0].Trim(), out int sx) &&
+                            int.TryParse(parts[1].Trim(), out int sy))
+                        {
+                            slots.Add(new DrillSlotConfigJson
+                            {
+                                position = new CellPositionJson(sx, sy),
+                                slotType = parts[2].Trim(),
+                                slotId = parts.Length > 3 ? parts[3].Trim() : ""
+                            });
+                        }
+                    }
+                    shape.slots = slots;
+                }
+                else
+                {
+                    shape.slots = new List<DrillSlotConfigJson>();
+                }
+
                 shapes.Add(shape);
             }
             catch (Exception e)

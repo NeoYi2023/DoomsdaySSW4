@@ -23,9 +23,9 @@ public class MiningManager : MonoBehaviour
         }
     }
 
-    // 地图尺寸常量（逻辑网格宽高，可通过修改常量扩展；默认 9×9）
+    // 地图尺寸常量（逻辑网格宽高，可通过修改常量扩展；默认 9×11）
     public const int LAYER_WIDTH = 9;
-    public const int LAYER_HEIGHT = 9;
+    public const int LAYER_HEIGHT = 11;
 
     // 当前挖矿数据
     private MiningData _miningData;

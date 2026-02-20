@@ -22,6 +22,7 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     [SerializeField] private Color emptyColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
     [SerializeField] private Color occupiedColor = new Color(0.3f, 0.6f, 0.9f, 0.8f);
     [SerializeField] private Color highlightColor = new Color(0.9f, 0.9f, 0.3f, 0.8f);
+    [SerializeField] private Color slotEligibleColor = new Color(0.3f, 0.85f, 0.5f, 0.85f);
     [SerializeField] private Color hoverColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
     [SerializeField] private Color invalidColor = new Color(0.9f, 0.3f, 0.3f, 0.8f);
     
@@ -32,6 +33,7 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     private ConfigManager _configManager;
     
     private Dictionary<Vector2Int, GameObject> _cellObjects = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<Vector2Int, TextMeshProUGUI> _cellLabels = new Dictionary<Vector2Int, TextMeshProUGUI>();
     private PlacedDrillShape _highlightedShape;
     private Vector2Int? _hoveredCell;
 
@@ -39,6 +41,11 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     private bool _isDragging;
     private bool _draggingExistingShape;
     private Vector2Int? _lastDragGridPos;
+
+    // 旋转中心设置模式
+    private bool _isDefiningPivot;
+    private bool _draggingPivot;
+    private static readonly Color pivotColor = new Color(1f, 0.85f, 0f, 0.9f);
 
     private void Awake()
     {
@@ -178,6 +185,29 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             forwarder.SetPlatformView(this);
 
             _cellObjects[pos] = cellObj;
+
+            // 为格子创建文字标签子节点（默认隐藏），用于显示"钻心"
+            TextMeshProUGUI existingLabel = cellObj.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (existingLabel == null)
+            {
+                GameObject labelObj = new GameObject("PivotLabel");
+                labelObj.transform.SetParent(cellObj.transform, false);
+                RectTransform labelRect = labelObj.AddComponent<RectTransform>();
+                labelRect.anchorMin = Vector2.zero;
+                labelRect.anchorMax = Vector2.one;
+                labelRect.offsetMin = Vector2.zero;
+                labelRect.offsetMax = Vector2.zero;
+                existingLabel = labelObj.AddComponent<TextMeshProUGUI>();
+                existingLabel.alignment = TextAlignmentOptions.Center;
+                existingLabel.fontSize = 10f;
+                existingLabel.color = Color.white;
+                existingLabel.raycastTarget = false;
+                existingLabel.enableWordWrapping = false;
+                existingLabel.overflowMode = TextOverflowModes.Overflow;
+            }
+            existingLabel.text = "";
+            existingLabel.gameObject.SetActive(false);
+            _cellLabels[pos] = existingLabel;
         }
 
         if (_cellObjects.Count < maxLogicCells)
@@ -206,6 +236,11 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         HashSet<Vector2Int> occupiedCells = _platformManager.GetAllOccupiedCells();
         HashSet<Vector2Int> highlightedCells = GetHighlightedCells();
 
+        DrillPlatformData platformData = _platformManager.GetPlatformData();
+        Vector2Int rotCenter = platformData != null
+            ? platformData.rotationCenter
+            : new Vector2Int(DrillPlatformData.PLATFORM_SIZE / 2, DrillPlatformData.PLATFORM_SIZE / 2);
+
         foreach (var kvp in _cellObjects)
         {
             Vector2Int pos = kvp.Key;
@@ -215,10 +250,22 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             Image image = cellObj.GetComponent<Image>();
             if (image == null) continue;
 
-            if (highlightedCells.Contains(pos))
-        {
-            image.color = highlightColor;
-        }
+            bool isPivotCell = (pos == rotCenter);
+            int pendingSlotCount = _platformManager.GetPendingSlotCount();
+            bool canPlaceSlot = pendingSlotCount > 0 && occupiedCells.Contains(pos) && _platformManager.GetSlotAtPosition(pos) == null;
+
+            if (_isDefiningPivot && isPivotCell)
+            {
+                image.color = pivotColor;
+            }
+            else if (highlightedCells.Contains(pos))
+            {
+                image.color = highlightColor;
+            }
+            else if (canPlaceSlot)
+            {
+                image.color = slotEligibleColor;
+            }
             else if (occupiedCells.Contains(pos))
             {
                 image.color = occupiedColor;
@@ -226,6 +273,20 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             else
             {
                 image.color = emptyColor;
+            }
+
+            // 更新"钻心"文字标签
+            if (_cellLabels.TryGetValue(pos, out TextMeshProUGUI label))
+            {
+                if (isPivotCell)
+                {
+                    label.text = "钻心";
+                    label.gameObject.SetActive(true);
+                }
+                else
+                {
+                    label.gameObject.SetActive(false);
+                }
             }
         }
     }
@@ -236,6 +297,16 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     public void HighlightShape(PlacedDrillShape shape)
     {
         _highlightedShape = shape;
+        Refresh();
+    }
+
+    /// <summary>
+    /// 设置旋转中心编辑模式
+    /// </summary>
+    public void SetPivotMode(bool active)
+    {
+        _isDefiningPivot = active;
+        _draggingPivot = false;
         Refresh();
     }
 
@@ -327,7 +398,20 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
 
         _isDragging = true;
         _draggingExistingShape = false;
+        _draggingPivot = false;
         _lastDragGridPos = gridPos;
+
+        // 旋转中心设置模式：拖拽旋转中心
+        if (_isDefiningPivot)
+        {
+            _draggingPivot = true;
+            if (_platformManager != null)
+            {
+                _platformManager.SetRotationCenter(gridPos.Value);
+                Refresh();
+            }
+            return;
+        }
 
         if (editorScreen == null)
         {
@@ -337,14 +421,12 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         string pendingShapeId = editorScreen.GetPendingShapeId();
         if (!string.IsNullOrEmpty(pendingShapeId))
         {
-            // 从库存拖出新造型：仅标记拖拽开始，实际放置在 PointerUp 中完成
             _draggingExistingShape = false;
             _hoveredCell = gridPos;
             UpdateHoverPreview();
         }
         else
         {
-            // 尝试拖动已有造型
             if (_platformManager == null)
             {
                 _platformManager = DrillPlatformManager.Instance;
@@ -375,6 +457,17 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
 
         _lastDragGridPos = gridPos;
 
+        // 旋转中心拖拽中：实时移动旋转中心
+        if (_draggingPivot)
+        {
+            if (_platformManager != null)
+            {
+                _platformManager.SetRotationCenter(gridPos.Value);
+                Refresh();
+            }
+            return;
+        }
+
         if (editorScreen == null)
         {
             return;
@@ -382,12 +475,10 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
 
         if (_draggingExistingShape)
         {
-            // 拖动已放置造型：实时尝试移动
             editorScreen.TryMoveSelectedShape(gridPos.Value);
         }
         else
         {
-            // 拖动待放置的造型：更新悬停预览
             _hoveredCell = gridPos;
             ClearHoverPreview();
             UpdateHoverPreview();
@@ -402,11 +493,25 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         if (!_isDragging) return;
         if (eventData.button != PointerEventData.InputButton.Left) return;
 
-        Vector2Int? gridPos = WorldToGridPosition(eventData.position);
-        if (gridPos.HasValue && editorScreen != null && !_draggingExistingShape)
+        if (_draggingPivot)
         {
-            // 拖拽新造型松手时尝试放置
-            editorScreen.TryPlaceAtPosition(gridPos.Value);
+            // 旋转中心拖拽结束
+            Vector2Int? gridPos = WorldToGridPosition(eventData.position);
+            if (gridPos.HasValue && _platformManager != null)
+            {
+                _platformManager.SetRotationCenter(gridPos.Value);
+                Refresh();
+            }
+            _isDragging = false;
+            _draggingPivot = false;
+            _lastDragGridPos = null;
+            return;
+        }
+
+        Vector2Int? dropPos = WorldToGridPosition(eventData.position);
+        if (dropPos.HasValue && editorScreen != null && !_draggingExistingShape)
+        {
+            editorScreen.TryPlaceAtPosition(dropPos.Value);
         }
 
         _isDragging = false;

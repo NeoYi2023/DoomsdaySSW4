@@ -91,7 +91,7 @@ public class DrillPlatformManager : MonoBehaviour
         {
             // 向后兼容：如果没有配置初始放置，自动放置第一个造型在中心
             string firstShapeId = _platformData.availableShapeIds[0];
-            Vector2Int centerPosition = new Vector2Int(4, 4);
+            Vector2Int centerPosition = new Vector2Int(DrillPlatformData.PLATFORM_SIZE / 2, DrillPlatformData.PLATFORM_SIZE / 2);
             TryPlaceShape(firstShapeId, centerPosition, 0);
             Debug.Log($"未配置初始钻头，自动放置第一个造型在中心");
         }
@@ -465,6 +465,19 @@ public class DrillPlatformManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 设置旋转挖掘中心点
+    /// </summary>
+    public bool SetRotationCenter(Vector2Int newCenter)
+    {
+        if (_platformData == null) return false;
+        if (!DrillPlatformData.IsWithinBounds(newCenter)) return false;
+
+        _platformData.rotationCenter = newCenter;
+        OnPlatformChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>
     /// 验证放置是否有效（不实际放置，仅检查）
     /// </summary>
     public PlaceResult ValidatePlacement(string shapeId, Vector2Int position, int rotation, string excludeInstanceId = null)
@@ -607,6 +620,58 @@ public class DrillPlatformManager : MonoBehaviour
     {
         if (_platformData == null) return null;
         return _platformData.FindSlotAtPosition(position);
+    }
+
+    /// <summary>
+    /// 获取待放置插槽数量（本关通过三选一获得、尚未放置的）
+    /// </summary>
+    public int GetPendingSlotCount()
+    {
+        if (_platformData == null) return 0;
+        return _platformData.pendingSlotCount;
+    }
+
+    /// <summary>
+    /// 增加待放置插槽数量（三选一选择“增加插槽”时调用）
+    /// </summary>
+    public void AddPendingSlot()
+    {
+        if (_platformData == null) return;
+        _platformData.pendingSlotCount++;
+        OnPlatformChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// 在指定平台格子上放置一个插槽（消耗 1 个待放置插槽）。仅当该格属于某已放置造型且该格尚无插槽时成功。插槽放置后不可取消或移动。
+    /// </summary>
+    public AddSlotResult TryAddSlotAt(Vector2Int platformPosition)
+    {
+        if (_platformData == null)
+            return new AddSlotResult { success = false, errorMessage = "平台未初始化" };
+        if (_platformData.pendingSlotCount <= 0)
+            return new AddSlotResult { success = false, errorMessage = "没有待放置的插槽" };
+        if (!DrillPlatformData.IsWithinBounds(platformPosition))
+            return new AddSlotResult { success = false, errorMessage = "位置超出平台边界" };
+        if (_platformData.FindSlotAtPosition(platformPosition) != null)
+            return new AddSlotResult { success = false, errorMessage = "该格子已有插槽" };
+
+        PlacedDrillShape shape = _platformData.FindShapeAtPosition(platformPosition, _configManager.GetShapeConfigDelegate());
+        if (shape == null)
+            return new AddSlotResult { success = false, errorMessage = "请点击已放置造型上且尚无插槽的格子" };
+
+        string slotId = $"{shape.instanceId}_slot_added_{Guid.NewGuid():N}";
+        PlacedDrillSlot slot = new PlacedDrillSlot
+        {
+            slotId = slotId,
+            platformPosition = platformPosition,
+            slotType = DrillSlotType.Single,
+            insertedBitId = string.Empty,
+            shapeInstanceId = shape.instanceId
+        };
+        _platformData.placedSlots.Add(slot);
+        _platformData.pendingSlotCount--;
+        OnPlatformChanged?.Invoke();
+        return new AddSlotResult { success = true, placedSlot = slot };
     }
 
     #endregion
@@ -783,4 +848,15 @@ public class InsertBitResult
     public bool success;
     public string errorMessage;
     public PlacedDrillBit placedBit;
+}
+
+/// <summary>
+/// 在格子上放置插槽操作结果
+/// </summary>
+[Serializable]
+public class AddSlotResult
+{
+    public bool success;
+    public string errorMessage;
+    public PlacedDrillSlot placedSlot;
 }

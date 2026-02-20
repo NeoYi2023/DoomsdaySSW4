@@ -538,7 +538,7 @@ public class MiningData
     
     // 地图尺寸（固定）
     public const int LAYER_WIDTH = 9;   // 每层宽度（列数）
-    public const int LAYER_HEIGHT = 9;   // 每层高度（行数）
+    public const int LAYER_HEIGHT = 11;   // 每层高度（行数）
     
     // 资源相关
     public Dictionary<MineralType, int> minerals; // 已挖掘的矿物
@@ -684,7 +684,7 @@ public class PlacedDrillShape
 [System.Serializable]
 public class DrillPlatformData
 {
-    public const int PLATFORM_SIZE = 9;              // 平台尺寸（PLATFORM_SIZE × PLATFORM_SIZE，默认 9x9，可通过常量调整）
+    public const int PLATFORM_SIZE = 11;              // 平台尺寸（PLATFORM_SIZE × PLATFORM_SIZE，默认 11x11，可通过常量调整）
     public List<PlacedDrillShape> placedShapes;      // 已放置的造型列表
     public List<string> availableShapeIds;           // 可用的造型ID列表（库存）
 }
@@ -765,7 +765,9 @@ public enum UpgradeType
 
 #### 3.11.9 钻头插槽系统
 
-钻机平台（造型）可以配置钻头插槽，用于插入钻头道具，增强钻探能力。
+钻机平台（造型）可以配置钻头插槽，用于插入钻头道具（钻头增强装置等），增强钻探能力。
+
+**插槽有两种来源**：（1）**造型配置表预定义**：在 `DrillShapeConfig.slots` 中配置，造型放置或旋转时同步到 `placedSlots`；（2）**三选一获得**：玩家选择“增加插槽”升级后获得待放置插槽数量，需在钻机编辑界面中手动选择一个**无插槽的造型格子**放置；放置后**不可取消或移动**。
 
 ```csharp
 /// <summary>
@@ -871,7 +873,7 @@ public class DrillPlatformData
     // ... 现有字段 ...
     
     /// <summary>
-    /// 已放置的插槽列表（从已放置的造型中提取）
+    /// 已放置的插槽列表（从已放置的造型中提取 + 三选一放置的插槽）
     /// </summary>
     public List<PlacedDrillSlot> placedSlots = new List<PlacedDrillSlot>();
     
@@ -879,6 +881,12 @@ public class DrillPlatformData
     /// 已插入的钻头列表
     /// </summary>
     public List<PlacedDrillBit> insertedBits = new List<PlacedDrillBit>();
+    
+    /// <summary>
+    /// 待放置插槽数量（本关通过三选一“增加插槽”获得、尚未在编辑界面放置的数量）。
+    /// 选择 DrillSlotAdd 时 +1，在编辑界面点击无插槽的造型格子成功放置时 -1。需参与存档/克隆。
+    /// </summary>
+    public int pendingSlotCount;
 }
 ```
 
@@ -898,6 +906,10 @@ public class DrillShapeConfig
     public List<DrillSlotConfig> slots = new List<DrillSlotConfig>();
 }
 ```
+
+**配置表对 slots 的约定**：
+- **JSON**：`slots` 为数组，每项含 `position`（x,y）、`slotType`（如 Single/Quad）、可选 `slotId`。
+- **Excel/CSV**：可增加 `slots` 列，格式例如 `x,y,Single,slotId;x,y,Quad,`（多组用分号分隔，slotId 可空）；无该列或为空时视为空列表。详见 7.3.1 钻头造型配置表示例。
 
 #### 3.11.13 攻击强度计算（含钻头加成）
 
@@ -1107,9 +1119,12 @@ public enum UpgradeOptionType
     OreValueBoost,      // 矿石价值提升
     DrillShapeUnlock,   // 解锁钻头造型（将指定造型加入当前关卡可用库存）
     DrillPlatformUpgrade,  // 钻机平台升级（提升基础强度或增加插槽）
+    DrillSlotAdd,       // 增加插槽（pendingSlotCount+1，需在编辑界面点击无插槽的造型格子放置，放置后不可取消或移动）
     DrillBitUnlock      // 解锁新钻头
 }
 ```
+
+**DrillSlotAdd 行为**：选择该选项后，`DrillPlatformData.pendingSlotCount += 1`；玩家在钻机编辑界面中点击某个**属于已放置造型且当前无插槽**的格子，可消耗 1 个待放置插槽并在该格创建 `PlacedDrillSlot`（与造型绑定）；插槽一旦嵌入不可取消或移动。可选：选择 DrillSlotAdd 后关闭三选一时若允许编辑则自动打开钻机编辑界面（同 3.18.4 联动方式）。
 
 #### 3.18.3 能源升级与钻头造型联动
 
@@ -1135,19 +1150,19 @@ public enum UpgradeOptionType
      - 调用 `EnergyUpgradeManager.ApplyUpgradeEffect(selectedOption)`；
      - 当 `selectedOption.type == DrillShapeUnlock` 时，通过 `DrillPlatformManager.AddShapeToInventory(shapeId)` 将对应 `shapeId` 写入当前关卡的 `DrillPlatformData.availableShapeIds`。
   4. 三选一界面按原有逻辑关闭，并通过 `GameManager.ResumeGame()` 恢复游戏流程。
-  5. **仅当本次选择的选项类型为 `DrillShapeUnlock` 时**，`UpgradeSelectionScreen.OnOptionSelected` 在关闭三选一界面之后，尝试自动打开钻机编辑界面：
+  5. **当本次选择的选项类型为 `DrillShapeUnlock` 或 `DrillSlotAdd` 时**，`UpgradeSelectionScreen.OnOptionSelected` 在关闭三选一界面之后，尝试自动打开钻机编辑界面：
      - 通过场景中查找（例如 `FindObjectOfType<DrillEditorScreen>(true)`）获取钻机编辑界面实例 `_drillEditorScreen`；
      - 调用 `_drillEditorScreen.CanEdit()` 判断当前是否允许编辑钻头（例如：未开启自动挖矿，且当前不在“回合结算动画处理中”等状态）；
-     - 若允许编辑，则调用 `_drillEditorScreen.Show()` 打开钻机编辑界面，让玩家立即在当前逻辑平台上布置新解锁的造型（平台逻辑尺寸由 `DrillPlatformData.PLATFORM_SIZE` 决定，默认 9×9，未来可扩展为 10×10 及更大）； 
+     - 若允许编辑，则调用 `_drillEditorScreen.Show()` 打开钻机编辑界面（DrillShapeUnlock：布置新解锁的造型；DrillSlotAdd：提示“请点击一个无插槽的造型格子放置插槽”）； 
      - 若当前不允许编辑（如自动挖矿中或回合处理中），则本次不会自动打开，仅记录日志提示，玩家可以稍后通过主界面的“编辑钻头”按钮手动进入。
 - **设计约束**：
-  - 该联动逻辑 **只对 `DrillShapeUnlock` 类型生效**，其他数值类升级（如 `DrillStrength`、`MiningEfficiency` 等）不会自动打开钻机编辑界面，以避免频繁打断流程。
+  - 该联动逻辑 **对 `DrillShapeUnlock` 与 `DrillSlotAdd` 类型生效**，其他数值类升级（如 `DrillStrength`、`MiningEfficiency` 等）不会自动打开钻机编辑界面，以避免频繁打断流程。
   - 自动打开钻机编辑界面的前提是三选一界面已经完成升级应用并关闭，避免 UI 相互覆盖或交互冲突。
   - 不改变原有的钻机平台数据结构和存档格式，联动仅发生在 UI 层的交互流程中。
 - **接口与调用关系补充**：
   - `UpgradeSelectionScreen.OnOptionSelected(EnergyUpgradeOption selectedOption)`：
     - 负责调用 `GameManager.ApplyUpgradeSelection(selectedOption)` 完成升级应用；
-    - 在 `selectedOption.type == UpgradeOptionType.DrillShapeUnlock` 且 `_drillEditorScreen.CanEdit()` 返回 true 时，直接调用 `_drillEditorScreen.Show()`。
+    - 在 `selectedOption.type == UpgradeOptionType.DrillShapeUnlock` 或 `selectedOption.type == UpgradeOptionType.DrillSlotAdd` 且 `_drillEditorScreen.CanEdit()` 返回 true 时，直接调用 `_drillEditorScreen.Show()`。
   - `DrillEditorScreen.CanEdit()`：用于约束是否允许当前帧打开编辑界面（如：禁止在自动挖矿或回合处理中打开），三选一 → 编辑界面的联动必须遵守该规则。
 
 ### 3.18.1 能源升级进度条UI设计
@@ -2894,6 +2909,19 @@ UI系统
     - **取消**：丢弃本次编辑会话内的所有调整，将 `DrillPlatformData` 恢复为进入编辑前的备份状态，然后关闭编辑界面；
     - **保存**：将当前平台布局写回当前钻头的 `DrillData.platformData`（用于后续回合与存档），但不关闭编辑界面，允许玩家继续微调；保存不会重置进入编辑前的备份数据，后续点击“取消”仍然表示回到进入本次编辑前的状态。
 
+  - **旋转中心（钻心）显示与设置**：
+    - **"钻心"文字标记**：在钻机编辑界面中，当前 `DrillPlatformData.rotationCenter` 对应的格子上始终显示"钻心"两字（使用 `TextMeshProUGUI` 子组件），其余格子不显示该文字。当旋转中心位置变更时，"钻心"文字随之移动到新的格子上。
+    - **DefinePivot 按钮**：钻机编辑界面中提供"设置旋转中心"按钮（Hierarchy 路径 `DrillEditorScreen/DefinePivot`，对应 `DrillEditorScreen.definePivotButton`），点击后进入"旋转中心设置模式"。
+    - **旋转中心设置模式交互规则**：
+      - 进入模式时清除当前造型选择（`ClearSelection()`），防止与造型拖拽操作冲突；
+      - 当前 `rotationCenter` 所在的格子以黄色高亮显示，同时格子上保持"钻心"文字；
+      - 玩家使用鼠标左键按下并拖动到平台内的其他格子，即可将旋转中心移动到新位置，拖动过程中实时更新黄色高亮和"钻心"文字的位置；
+      - 新位置必须在平台边界内（`DrillPlatformData.IsWithinBounds`），越界时不更新旋转中心；
+      - 设置完成后，玩家点击"保存"按钮（`SaveButton`）将包含新 `rotationCenter` 的平台数据持久化到 `DrillData.platformData`，同时自动退出旋转中心设置模式；
+      - 关闭编辑界面（确认/取消）时也会自动退出旋转中心设置模式。
+    - **数据存储**：旋转中心存储在 `DrillPlatformData.rotationCenter`（`Vector2Int`），通过 `DrillPlatformManager.SetRotationCenter(Vector2Int)` 方法修改，该方法会校验边界并触发 `OnPlatformChanged` 事件。
+    - **与挖掘系统的关联**：`DrillAttackCalculator` 在计算旋转挖掘时读取 `DrillPlatformData.rotationCenter` 作为旋转中心，修改后的旋转中心将影响后续回合的攻击范围旋转轨迹。
+
 ##### 7.2.1.0 钻头库存列表 UI（`DrillShapeInventory`）
 
 - **组件职责**：
@@ -3252,9 +3280,9 @@ UI系统
       - **平台编辑界面格子坐标规则（DrillPlatformView）**：
         - 钻机平台编辑界面的静态格子（`DrillPlatformCell`）在初始化时，**以 `DrillPlatformCell` 的 `x`/`y`（`GridPosition`）为唯一平台坐标来源**；`DrillPlatformView.InitGridFromChildren()` 仅遍历 `gridContainer` 下的 `DrillPlatformCell`，读取其 `GridPosition`，将坐标在 `[0, DrillPlatformData.PLATFORM_SIZE)` 范围内的格子加入 `_cellObjects`，不根据 Canvas 位置推断坐标；
         - 从而钻头编辑界面中的“平台坐标”与 PlatformGrid 中配置的完全一致，与挖掘地图按同一逻辑坐标对齐；超出范围的 `DrillPlatformCell` 或重复坐标的节点在初始化时跳过并记录警告，仅参与逻辑的格子参与钻头放置与挖掘地图对齐。
-     - **中心点**：钻头的逻辑中心点位置默认仍为每层地图的中心点 `((LAYER_WIDTH - 1) / 2, (LAYER_HEIGHT - 1) / 2)`，六边形布局仅影响渲染坐标，不改变逻辑坐标与存档结构；在默认 9×9 配置下，该中心点为 `(4, 4)`。
+     - **中心点**：钻头的逻辑中心点位置默认仍为每层地图的中心点 `((LAYER_WIDTH - 1) / 2, (LAYER_HEIGHT - 1) / 2)`，六边形布局仅影响渲染坐标，不改变逻辑坐标与存档结构；在默认 9×11 配置下，该中心点为 `(4, 5)`。
      - **坐标映射语义（奇行偏移 odd-r offset）**：
-       - 语义上仍然采用平顶六边形 odd-r 布局：使用 `(x, y)` 作为逻辑网格坐标，其中 `x ∈ [0, LAYER_WIDTH-1]`、`y ∈ [0, LAYER_HEIGHT-1]`，`y = 0` 为最上方一行（默认 9×9 配置下为 0~8）；
+       - 语义上仍然采用平顶六边形 odd-r 布局：使用 `(x, y)` 作为逻辑网格坐标，其中 `x ∈ [0, LAYER_WIDTH-1]`、`y ∈ [0, LAYER_HEIGHT-1]`，`y = 0` 为最上方一行（默认 9×11 配置下为 X:0~8, Y:0~10）；
        - 单格宽度为 `w`、高度为 `h` 时，水平方向中心间距约为 `w * 0.75`，竖直方向中心间距约为 `h * 0.866`，奇数行在水平方向额外右移约 `0.5w`；
        - 这些几何关系由 `HexLayoutGroup` 内部实现，`MiningMapView` 只负责提供合适的 `CellSize / Spacing`，不再直接计算具体像素坐标。
      - 地图尺寸仍由常量定义，不可动态修改，如需扩展层宽/高，应同时更新逻辑网格与 `HexLayoutGroup` 的约束参数。
@@ -3449,12 +3477,13 @@ UI系统
    - 用途：定义触发三选一升级的能源阈值序列
 
 7. **钻头造型配置表示例（DrillShapeConfigs_钻头造型配置表_示例.csv）**
-   - 列：`shapeId`、`shapeName`、`baseAttackStrength`、`cells`、`traits`、`description`
+   - 列：`shapeId`、`shapeName`、`baseAttackStrength`、`cells`、`traits`、`slots`、`description`
    - 用途：以 CSV 示例形式给出若干典型钻头造型（十字形、直线、L 形、T 形、方块形、Z/S 形、能源提取专用等），并作为能源升级系统中 `DrillShapeUnlock` 选项的来源表：
      - 对于每一条 `shapeId`，可以在 `EnergyUpgradeConfigs` 中增加一条对应的“解锁钻头造型”升级配置行（`type = DrillShapeUnlock`，`upgradeId` 与 `shapeId` 对应），用于在三选一中解锁该造型。
    - 说明：
      - `cells`：使用 `x,y;x,y;...` 形式定义相对锚点(0,0)的格子坐标
      - `traits`：为 JSON 字符串，内部字段与 `ShapeTraitConfig` 对应（`traitId/traitName/triggerCondition/effectType/effectValue/description`）
+     - `slots`：可选。格式为 `x,y,Single,slotId;x,y,Quad,`（多组用分号分隔；每组为 造型内相对坐标x, 造型内相对坐标y, 插槽类型Single/Quad, 可选slotId）；无该列或为空时造型无预定义插槽
      - 本示例 CSV 建议始终使用 UTF-8 编码保存，以避免中文字段显示乱码
 
 #### 7.3.2 Excel转Unity数据流程
@@ -3777,6 +3806,7 @@ string text = LocalizationManager.Instance.GetLocalizedString("ui.menu.start");
 | - | 1.10 | 添加动态中文字体加载系统：实现按需生成字符的动态字体模式，支持内存优化配置，集成到GameInitializer初始化流程，添加字体管理模块和完整API接口 | - |
 | - | 1.11 | 添加矿石视觉系统和挖矿动效系统扩展：矿石图片素材配置、晃动特效、红色高亮反馈、金钱飞行动画 | - |
 | - | 1.12 | 添加能源三选一与钻机编辑界面联动规则：当选择DrillShapeUnlock类型升级时，在升级完成并关闭三选一界面后自动尝试打开钻机编辑界面 | - |
+| - | 1.13 | 添加钻心显示与旋转中心设置功能：在钻头编辑界面中心格显示"钻心"文字标记，新增DefinePivot按钮支持拖拽修改旋转中心位置 | - |
 
 ---
 

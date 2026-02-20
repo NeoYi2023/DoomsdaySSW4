@@ -57,7 +57,7 @@ public class DrillAttackCalculator : MonoBehaviour
                 return data.rotationCenter;
             }
         }
-        return new Vector2Int(4, 5);
+        return new Vector2Int(DrillPlatformData.PLATFORM_SIZE / 2, DrillPlatformData.PLATFORM_SIZE / 2);
     }
 
     /// <summary>
@@ -353,7 +353,7 @@ public class DrillAttackCalculator : MonoBehaviour
     /// <param name="mapWidth">矿石地图宽度</param>
     /// <param name="mapHeight">矿石地图高度</param>
     /// <returns>圆环扫掠结果</returns>
-    public CircularSweepResult CalculateCircularSweepAttackMap(DrillData drillData = null, int mapWidth = 9, int mapHeight = 9)
+    public CircularSweepResult CalculateCircularSweepAttackMap(DrillData drillData = null, int mapWidth = 9, int mapHeight = 11)
     {
         EnsureManagers();
 
@@ -453,7 +453,7 @@ public class DrillAttackCalculator : MonoBehaviour
     /// <summary>
     /// 获取圆环扫掠覆盖的所有格子坐标（不含攻击强度，仅范围）
     /// </summary>
-    public HashSet<Vector2Int> GetCircularSweepRange(int mapWidth = 9, int mapHeight = 9)
+    public HashSet<Vector2Int> GetCircularSweepRange(int mapWidth = 9, int mapHeight = 11)
     {
         EnsureManagers();
 
@@ -523,7 +523,7 @@ public class DrillAttackCalculator : MonoBehaviour
     /// 为圆环扫掠计算对特定矿石的攻击强度（考虑矿石类型触发的特性）。
     /// 累加所有在同一半径圆环上的钻头格的攻击强度。
     /// </summary>
-    public int CalculateCircularSweepStrengthForOre(Vector2Int mapPosition, string oreType, DrillData drillData = null, int mapWidth = 9, int mapHeight = 9)
+    public int CalculateCircularSweepStrengthForOre(Vector2Int mapPosition, string oreType, DrillData drillData = null, int mapWidth = 9, int mapHeight = 11)
     {
         EnsureManagers();
 

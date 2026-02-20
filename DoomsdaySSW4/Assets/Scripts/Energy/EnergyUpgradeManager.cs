@@ -453,6 +453,14 @@ public class EnergyUpgradeManager : MonoBehaviour
                 }
                 break;
 
+            case UpgradeOptionType.DrillSlotAdd:
+                if (platformManager != null)
+                {
+                    platformManager.AddPendingSlot();
+                    Debug.Log("增加插槽：待放置插槽 +1，请在钻机编辑界面点击无插槽的造型格子放置");
+                }
+                break;
+
             case UpgradeOptionType.DrillPlatformUpgrade:
                 // 钻机平台升级：提升基础强度或增加插槽
                 // upgradeId 指向造型ID，value 表示强度提升值或插槽数量

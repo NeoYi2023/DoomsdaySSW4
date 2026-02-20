@@ -672,8 +672,8 @@ public class UpgradeSelectionScreen : MonoBehaviour
             _gameManager.ResumeGame();
         }
 
-        // 如果本次选择的是解锁钻头造型（DrillShapeUnlock），在升级应用并关闭三选一界面后尝试自动打开钻机编辑界面
-        if (selectedOption != null && selectedOption.type == UpgradeOptionType.DrillShapeUnlock)
+        // 如果本次选择的是解锁钻头造型（DrillShapeUnlock）或增加插槽（DrillSlotAdd），在升级应用并关闭三选一界面后尝试自动打开钻机编辑界面
+        if (selectedOption != null && (selectedOption.type == UpgradeOptionType.DrillShapeUnlock || selectedOption.type == UpgradeOptionType.DrillSlotAdd))
         {
             // 若还未缓存到实例，尝试动态查找一次（包含未激活对象）
             if (_drillEditorScreen == null)
@@ -683,7 +683,7 @@ public class UpgradeSelectionScreen : MonoBehaviour
 
             if (_drillEditorScreen == null)
             {
-                Debug.LogWarning("UpgradeSelectionScreen: 选择了DrillShapeUnlock但未找到DrillEditorScreen，无法自动打开钻机编辑界面。");
+                Debug.LogWarning("UpgradeSelectionScreen: 选择了需打开钻机编辑的升级但未找到DrillEditorScreen，无法自动打开钻机编辑界面。");
             }
             else
             {
