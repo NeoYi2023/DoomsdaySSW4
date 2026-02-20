@@ -85,11 +85,12 @@ public class TurnManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 结束当前回合（协程版本，支持等待动画完成）
+    /// 结束当前回合（协程版本）。钻机以60度/秒做360度旋转扫掠攻击。
+    /// 若一圈后扫掠范围内所有矿石都被挖空，则自动刷出下一层继续旋转，
+    /// 直到旋转一圈后仍有矿石残留才算本回合结束。
     /// </summary>
     public IEnumerator EndTurnCoroutine()
     {
-        // 防止重复执行
         if (_isProcessingTurn)
         {
             yield break;
@@ -98,98 +99,122 @@ public class TurnManager : MonoBehaviour
         
         if (_currentTurn == 0)
         {
-            // 第一回合，先开始
             StartTurn();
         }
 
-        Debug.Log($"回合 {_currentTurn} 结束，开始执行挖矿逻辑");
+        Debug.Log($"回合 {_currentTurn} 结束，开始执行旋转挖掘");
 
-        // 先获取要攻击的格子列表（不造成伤害，用于动效）
         DrillData drill = _drillManager.GetCurrentDrill();
-        MiningResult result = null;
-        bool layerSwitched = false;
+        MiningResult accumulatedResult = new MiningResult();
         
         if (drill != null)
         {
             MiningData miningData = _miningManager.GetMiningData();
             if (miningData != null)
             {
-                int currentLayerDepth = miningData.currentDepth >= 1 ? miningData.currentDepth : 1;
-                // 先执行实际的挖矿逻辑（造成伤害），获取攻击结果
-                result = _miningManager.AttackOresInRange(drill, currentLayerDepth);
-                
-                // 获取MiningMapView引用
                 MiningMapView miningMapView = FindObjectOfType<MiningMapView>();
-                
-                // 播放晃动动画（使用攻击结果中的格子信息，包含isFullyMined状态）
-                if (result != null && result.attackedTiles != null && result.attackedTiles.Count > 0)
+                bool continueRotation = true;
+
+                while (continueRotation)
                 {
+                    int currentLayerDepth = miningData.currentDepth >= 1 ? miningData.currentDepth : 1;
+
+                    // 计算圆环扫掠攻击结果
+                    DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
+                    CircularSweepResult sweepResult = calculator.CalculateCircularSweepAttackMap(
+                        drill, MiningManager.LAYER_WIDTH, MiningManager.LAYER_HEIGHT);
+
+                    // 执行挖矿逻辑（造成伤害）
+                    MiningResult result = _miningManager.AttackOresInRange(drill, currentLayerDepth);
+
+                    // 播放360度旋转动画，过程中按角度触发攻击特效
                     if (miningMapView != null)
                     {
-                        // 晃动动画（带红色高亮反馈）
-                        yield return miningMapView.PlayShakeAnimation(result.attackedTiles);
-                        
-                        // 播放金钱飞行特效（对于被完全挖掉的格子）
+                        yield return miningMapView.PlayRotationMiningAnimation(
+                            60f, sweepResult.angleToTargets, result.attackedTiles);
+
+                        // 播放金钱飞行特效
                         MiningEffectsManager effectsManager = MiningEffectsManager.Instance;
-                        if (effectsManager != null)
+                        if (effectsManager != null && result.attackedTiles != null && result.attackedTiles.Count > 0)
                         {
                             yield return effectsManager.PlayMiningEffectSequence(result.attackedTiles, miningMapView);
                         }
-                        
-                        // 刷新地图显示（更新已挖掉的格子）
+
                         miningMapView.UpdateMap(currentLayerDepth);
                     }
+
+                    // 累加结果
+                    if (result != null)
+                    {
+                        accumulatedResult.moneyGained += result.moneyGained;
+                        accumulatedResult.energyGained += result.energyGained;
+                        accumulatedResult.minedOres.AddRange(result.minedOres);
+                        accumulatedResult.partiallyDamagedOres.AddRange(result.partiallyDamagedOres);
+                        accumulatedResult.attackedTiles.AddRange(result.attackedTiles);
+                    }
+
+                    // 检查扫掠范围内是否还有未挖掉的矿石
+                    bool allSweptOresMined = _miningManager.IsLayerFullyMined(currentLayerDepth);
+
+                    if (allSweptOresMined)
+                    {
+                        // 所有矿石挖空 -> 切换到下一层，继续旋转
+                        bool switched = _miningManager.TrySwitchToNextLayer();
+                        if (switched)
+                        {
+                            Debug.Log($"圆环扫掠一圈后所有矿石已挖空，自动切换到下一层");
+                            GameManager gameManager = GameManager.Instance;
+                            if (gameManager != null)
+                            {
+                                gameManager.NotifyGameStateChanged();
+                            }
+                            OnLayerSwitched?.Invoke();
+
+                            if (miningMapView != null)
+                            {
+                                int newDepth = miningData.currentDepth;
+                                miningMapView.UpdateMap(newDepth);
+                            }
+                            // continueRotation = true, 继续 while 循环
+                        }
+                        else
+                        {
+                            // 已到最大层数，无法继续
+                            continueRotation = false;
+                        }
+                    }
+                    else
+                    {
+                        // 有残留矿石，本回合结束
+                        continueRotation = false;
+                    }
                 }
-                
-                // 应用矿石发现能力加成（每回合额外发现矿石）
+
+                // 应用矿石发现能力加成
                 if (_energyManager != null)
                 {
+                    int currentLayerDepth = miningData.currentDepth >= 1 ? miningData.currentDepth : 1;
                     int discoveryBonus = _energyManager.GetOreDiscoveryBonus();
                     if (discoveryBonus > 0)
                     {
-                        // 额外发现矿石（随机揭示当前层未揭示的矿石）
                         _miningManager.DiscoverAdditionalOres(currentLayerDepth, discoveryBonus);
                     }
                 }
 
-                // 处理挖矿结果
-                if (result != null && (result.moneyGained > 0 || result.energyGained > 0))
+                // 处理累计挖矿结果
+                if (accumulatedResult.moneyGained > 0 || accumulatedResult.energyGained > 0)
                 {
-                    Debug.Log($"本回合挖矿结果: 金钱 +{result.moneyGained}, 能源 +{result.energyGained}");
+                    Debug.Log($"本回合挖矿结果: 金钱 +{accumulatedResult.moneyGained}, 能源 +{accumulatedResult.energyGained}");
 
-                    // 金钱转化为还债
-                    if (result.moneyGained > 0)
+                    if (accumulatedResult.moneyGained > 0)
                     {
-                        _debtManager.AddMoneyAndPayDebt(result.moneyGained);
+                        _debtManager.AddMoneyAndPayDebt(accumulatedResult.moneyGained);
                     }
 
-                    // 能源累计
-                    if (result.energyGained > 0)
+                    if (accumulatedResult.energyGained > 0)
                     {
-                        _energyManager.AddEnergy(result.energyGained);
+                        _energyManager.AddEnergy(accumulatedResult.energyGained);
                     }
-                }
-
-                // 检查当前层是否挖完，如果挖完则切换到下一层
-                layerSwitched = _miningManager.TrySwitchToNextLayer();
-                if (layerSwitched)
-                {
-                    // 通知GameManager更新UI（触发UI刷新以显示新层）
-                    GameManager gameManager = GameManager.Instance;
-                    if (gameManager != null)
-                    {
-                        gameManager.NotifyGameStateChanged();
-                    }
-                    
-                    // 触发层切换事件
-                    OnLayerSwitched?.Invoke();
-                }
-                else if (_isAutoMiningEnabled)
-                {
-                    // 当前层未挖完，无法进入下一层，关闭自动挖矿
-                    Debug.Log("当前层未挖完，无法进入下一层，自动关闭自动挖矿");
-                    _isAutoMiningEnabled = false;
-                    OnAutoMiningChanged?.Invoke(false);
                 }
             }
         }
@@ -200,14 +225,12 @@ public class TurnManager : MonoBehaviour
             int totalPaidDebt = _debtManager.GetPaidDebtAmount();
             _taskManager.UpdateDebtProgress(totalPaidDebt);
 
-            // 检查任务完成
             if (_taskManager.CheckTaskCompletion())
             {
                 _taskManager.CompleteCurrentTask();
             }
         }
 
-        // 检查任务失败
         if (_taskManager != null)
         {
             _taskManager.CheckTaskFailure(_currentTurn);
@@ -215,7 +238,6 @@ public class TurnManager : MonoBehaviour
 
         OnTurnEnded?.Invoke(_currentTurn);
 
-        // 开始下一回合
         if (!IsTurnLimitReached())
         {
             StartTurn();
@@ -224,7 +246,6 @@ public class TurnManager : MonoBehaviour
         {
             Debug.LogWarning($"已达到回合限制: {_maxTurns}");
             
-            // 修复BUG 2: 当达到maxTurns时，扣除任务要求的targetDebtAmount
             if (_taskManager != null)
             {
                 TaskData taskData = _taskManager.GetTaskData();
@@ -234,7 +255,6 @@ public class TurnManager : MonoBehaviour
                 }
             }
 
-            // 达到回合限制，关闭自动挖矿
             if (_isAutoMiningEnabled)
             {
                 _isAutoMiningEnabled = false;

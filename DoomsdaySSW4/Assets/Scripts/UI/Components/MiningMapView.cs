@@ -62,6 +62,18 @@ public class MiningMapView : MonoBehaviour
 
     [Header("六边形布局设置")]
     [SerializeField] private bool useHexLayout = true; // 是否使用平顶六边形视觉布局
+
+    [Header("钻头旋转")]
+    [SerializeField] private bool enableDrillRotation = true; // 是否启用挖掘中钻头旋转
+    [SerializeField] private float drillRotationDegreesPerSecond = 60f; // 旋转角速度（度/秒）
+
+    [Header("挖掘描边")]
+    [SerializeField] private bool enableMiningOutline = true; // 是否在挖掘过程中描边显示「当前正在被挖」的格子
+    [SerializeField] private float miningOutlineWindowSeconds = 1f; // 视为「当前正在被挖掘」的时间窗口（秒）
+    [SerializeField] private Color miningOutlineColor = Color.white; // 描边颜色（白色加粗描边）
+    [SerializeField] private Vector2 miningOutlineDistance = new Vector2(5f, 5f); // 描边扩散距离（像素），越大描边越粗
+    [SerializeField] private Color miningOutlineHighlightColor = new Color(1f, 1f, 1f, 1f); // 被描边格子的高亮色
+    [SerializeField] [Range(0f, 1f)] private float miningOutlineHighlightBlend = 0.45f; // 高亮混合强度（0=无高亮，1=纯高亮色）
     
     private readonly Color _defaultOreColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
     
@@ -75,6 +87,22 @@ public class MiningMapView : MonoBehaviour
     
     // 未完全挖掉的格子记录（用于红色高亮）
     private HashSet<Vector2Int> _damagedButNotMinedTiles = new HashSet<Vector2Int>();
+
+    private bool _visualRotationPaused = false;
+    private bool _isRotationAnimating = false;
+    private HashSet<Vector2Int> _currentMiningOutlineTiles = new HashSet<Vector2Int>(); // 当前显示挖掘描边的格子
+
+    /// <summary>
+    /// 暂停/恢复视觉旋转（钻头编辑界面打开时暂停）
+    /// </summary>
+    public void SetVisualRotationPaused(bool paused)
+    {
+        _visualRotationPaused = paused;
+        if (paused && platformGridRoot != null && !_isRotationAnimating)
+        {
+            platformGridRoot.localRotation = Quaternion.identity;
+        }
+    }
 
     private void Awake()
     {
@@ -1126,15 +1154,12 @@ public class MiningMapView : MonoBehaviour
     }
 
     /// <summary>
-    /// 从造型系统获取攻击范围（含当前回合旋转挖掘相位）
+    /// 从圆环扫掠系统获取攻击范围
     /// </summary>
     private HashSet<Vector2Int> GetAttackRangeFromShapeSystem()
     {
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
-        int miningRotationDegrees = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
-        int? miningRotation = miningRotationDegrees != 0 ? (int?)miningRotationDegrees : null;
-        return calculator.GetAttackRange(miningRotation);
+        return calculator.GetCircularSweepRange(MiningManager.LAYER_WIDTH, MiningManager.LAYER_HEIGHT);
     }
 
     /// <summary>
@@ -1200,22 +1225,217 @@ public class MiningMapView : MonoBehaviour
     }
 
     /// <summary>
+    /// 获取在角度区间 [angleStart, angleEnd] 内被攻击的格子集合（用于「当前 N 秒正在被挖掘」描边）
+    /// </summary>
+    private static HashSet<Vector2Int> GetTilesInAngleRange(
+        List<float> sortedAngles,
+        Dictionary<float, List<Vector2Int>> angleToTargets,
+        float angleStart,
+        float angleEnd)
+    {
+        HashSet<Vector2Int> set = new HashSet<Vector2Int>();
+        if (sortedAngles == null || angleToTargets == null) return set;
+        foreach (float angle in sortedAngles)
+        {
+            if (angle < angleStart) continue;
+            if (angle > angleEnd) break;
+            if (angleToTargets.TryGetValue(angle, out List<Vector2Int> targets) && targets != null)
+            {
+                foreach (var pos in targets)
+                    set.Add(pos);
+            }
+        }
+        return set;
+    }
+
+    /// <summary>
+    /// 为指定格子设置或清除「正在被挖掘」描边（Unity Outline 组件）并叠加高亮效果
+    /// </summary>
+    private void SetMiningOutlineForTiles(IEnumerable<Vector2Int> positions)
+    {
+        HashSet<Vector2Int> newSet = positions == null ? new HashSet<Vector2Int>() : new HashSet<Vector2Int>(positions);
+
+        // 移除不再需要描边的格子：关闭描边并恢复格子原始颜色
+        foreach (var pos in _currentMiningOutlineTiles.ToList())
+        {
+            if (newSet.Contains(pos)) continue;
+            if (_tileMap.TryGetValue(pos, out GameObject tileObj) && tileObj != null)
+            {
+                Image img = tileObj.GetComponent<Image>();
+                if (img != null)
+                {
+                    Outline outline = img.GetComponent<Outline>();
+                    if (outline != null)
+                        outline.enabled = false;
+                    if (_baseColors.TryGetValue(pos, out Color baseColor))
+                        img.color = baseColor;
+                }
+            }
+            _currentMiningOutlineTiles.Remove(pos);
+        }
+
+        // 为需要描边的格子：加粗白色描边 + 高亮
+        foreach (var pos in newSet)
+        {
+            if (!_tileMap.TryGetValue(pos, out GameObject tileObj) || tileObj == null) continue;
+            Image img = tileObj.GetComponent<Image>();
+            if (img == null) continue;
+            Outline outline = img.GetComponent<Outline>();
+            if (outline == null)
+                outline = img.gameObject.AddComponent<Outline>();
+            outline.effectColor = miningOutlineColor;
+            outline.effectDistance = miningOutlineDistance;
+            outline.enabled = true;
+            if (_baseColors.TryGetValue(pos, out Color baseColor))
+                img.color = Color.Lerp(baseColor, miningOutlineHighlightColor, miningOutlineHighlightBlend);
+            _currentMiningOutlineTiles.Add(pos);
+        }
+    }
+
+    /// <summary>
+    /// 播放旋转挖掘动画：platformGridRoot 以指定角速度顺时针旋转360度，
+    /// 过程中按角度触发各矿石格的攻击特效。
+    /// </summary>
+    /// <param name="degreesPerSecond">旋转角速度（度/秒），默认60</param>
+    /// <param name="angleToTargets">角度 -> 该角度应触发攻击的目标格列表</param>
+    /// <param name="attackedTiles">预计算的攻击结果（用于特效展示）</param>
+    public IEnumerator PlayRotationMiningAnimation(
+        float degreesPerSecond,
+        Dictionary<float, List<Vector2Int>> angleToTargets,
+        List<AttackedTileInfo> attackedTiles)
+    {
+        if (platformGridRoot == null || !enableDrillRotation)
+        {
+            yield break;
+        }
+
+        _isAnimating = true;
+        _isRotationAnimating = true;
+
+        // 构建攻击结果查找表
+        Dictionary<Vector2Int, AttackedTileInfo> attackLookup = new Dictionary<Vector2Int, AttackedTileInfo>();
+        if (attackedTiles != null)
+        {
+            foreach (var tile in attackedTiles)
+            {
+                if (!attackLookup.ContainsKey(tile.position))
+                    attackLookup[tile.position] = tile;
+            }
+        }
+
+        // 将 angleToTargets 的 key 排序到列表中，便于按角度顺序触发
+        List<float> sortedAngles = new List<float>();
+        if (angleToTargets != null)
+        {
+            sortedAngles.AddRange(angleToTargets.Keys);
+            sortedAngles.Sort();
+        }
+
+        int nextAngleIndex = 0;
+        float totalRotated = 0f;
+
+        // 保存初始旋转
+        Quaternion startRotation = platformGridRoot.localRotation;
+
+        // 收集旋转过程中被触发的格子，旋转结束后统一播放晃动
+        List<AttackedTileInfo> pendingShakeTiles = new List<AttackedTileInfo>();
+        float lastOutlineShakeTime = Time.time; // 用于「每秒当前被挖掘格子振动1次」
+
+        while (totalRotated < 360f)
+        {
+            if (_visualRotationPaused)
+            {
+                yield return null;
+                continue;
+            }
+
+            float deltaAngle = degreesPerSecond * Time.deltaTime;
+            totalRotated += deltaAngle;
+            if (totalRotated > 360f) totalRotated = 360f;
+
+            // 顺时针旋转（Unity UI 中 Z 轴负方向为顺时针）
+            platformGridRoot.localRotation = startRotation * Quaternion.Euler(0f, 0f, -totalRotated);
+
+            // 检查是否有新的角度被经过，仅收集待晃动格子（不在此处更新矿石格视觉，等振动后再刷新）
+            while (nextAngleIndex < sortedAngles.Count && sortedAngles[nextAngleIndex] <= totalRotated)
+            {
+                float angle = sortedAngles[nextAngleIndex];
+                if (angleToTargets.TryGetValue(angle, out List<Vector2Int> targets))
+                {
+                    foreach (var pos in targets)
+                    {
+                        if (attackLookup.TryGetValue(pos, out AttackedTileInfo tileInfo))
+                        {
+                            if (!pendingShakeTiles.Any(t => t.position == pos))
+                                pendingShakeTiles.Add(tileInfo);
+                        }
+                    }
+                }
+                nextAngleIndex++;
+            }
+
+            // 描边：显示「当前 miningOutlineWindowSeconds 秒内」正在被挖掘的矿石格
+            HashSet<Vector2Int> outlineTiles = null;
+            if (enableMiningOutline && angleToTargets != null && sortedAngles.Count > 0)
+            {
+                float angleWindow = degreesPerSecond * miningOutlineWindowSeconds;
+                float angleStart = Mathf.Max(0f, totalRotated - angleWindow);
+                float angleEnd = totalRotated;
+                outlineTiles = GetTilesInAngleRange(sortedAngles, angleToTargets, angleStart, angleEnd);
+                SetMiningOutlineForTiles(outlineTiles);
+            }
+
+            // 每秒让当前被挖掘的格子振动 1 次（不阻塞旋转，不清除 animating 状态）
+            if (outlineTiles != null && outlineTiles.Count > 0 && Time.time - lastOutlineShakeTime >= 1f)
+            {
+                lastOutlineShakeTime = Time.time;
+                List<AttackedTileInfo> outlineShakeList = new List<AttackedTileInfo>();
+                foreach (var pos in outlineTiles)
+                {
+                    if (attackLookup.TryGetValue(pos, out AttackedTileInfo info))
+                        outlineShakeList.Add(info);
+                }
+                if (outlineShakeList.Count > 0)
+                    StartCoroutine(PlayShakeAnimation(outlineShakeList, clearAnimatingAtEnd: false, stopExistingShakes: false));
+            }
+
+            yield return null;
+        }
+
+        // 旋转结束后清除挖掘描边，再播放振动
+        SetMiningOutlineForTiles(new List<Vector2Int>());
+
+        // 旋转结束后：先播放挖掘振动（晃动），再由外部在振动结束后调用 UpdateMap 刷新矿石格状态
+        if (pendingShakeTiles.Count > 0)
+        {
+            yield return PlayShakeAnimation(pendingShakeTiles);
+        }
+
+        // 旋转完成，重置到初始角度
+        platformGridRoot.localRotation = startRotation;
+
+        _isRotationAnimating = false;
+        _isAnimating = false;
+    }
+
+    /// <summary>
     /// 播放晃动动画
     /// </summary>
     /// <param name="attackedTiles">被攻击的格子信息列表</param>
+    /// <param name="clearAnimatingAtEnd">结束时是否清除 _isAnimating（从旋转中每秒触发的描边振动传 false）</param>
+    /// <param name="stopExistingShakes">是否先停止已有晃动（从旋转中触发的描边振动传 false 以允许多段重叠）</param>
     /// <returns>协程，用于等待动画完成</returns>
-    public IEnumerator PlayShakeAnimation(List<AttackedTileInfo> attackedTiles)
+    public IEnumerator PlayShakeAnimation(List<AttackedTileInfo> attackedTiles, bool clearAnimatingAtEnd = true, bool stopExistingShakes = true)
     {
         if (attackedTiles == null || attackedTiles.Count == 0)
         {
             yield break;
         }
 
-        // 标记正在播放动画
-        _isAnimating = true;
-        
-        // 停止所有正在进行的晃动动画
-        StopAllShakeAnimations();
+        if (clearAnimatingAtEnd)
+            _isAnimating = true;
+        if (stopExistingShakes)
+            StopAllShakeAnimations();
         
         // 清除并记录未完全挖掉的格子（用于红色高亮）
         _damagedButNotMinedTiles.Clear();
@@ -1263,8 +1483,8 @@ public class MiningMapView : MonoBehaviour
         // 晃动结束，清除红色高亮记录
         _damagedButNotMinedTiles.Clear();
         
-        // 清除动画标志
-        _isAnimating = false;
+        if (clearAnimatingAtEnd)
+            _isAnimating = false;
     }
 
     /// <summary>

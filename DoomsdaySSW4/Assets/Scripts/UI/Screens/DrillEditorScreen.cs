@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
-
 /// <summary>
 /// 钻机编辑界面：允许玩家在回合之间编辑钻机平台上的造型布局
 /// </summary>
@@ -30,9 +29,8 @@ public class DrillEditorScreen : MonoBehaviour
     private DrillPlatformData _backupData; // 用于取消操作时恢复
     private PlacedDrillShape _selectedShape;
     private string _pendingShapeId; // 从库存拖出准备放置的造型ID
-    private int _pendingShapeRotation; // 待放置造型的旋转角度（0/90/180/270）
+    private int _pendingShapeRotation; // 待放置造型的旋转角度（0/60/120/180/240/300）
     private bool _isDraggingFromInventory; // 是否正从库存拖拽造型
-    
     private void Awake()
     {
         _platformManager = DrillPlatformManager.Instance;
@@ -122,6 +120,13 @@ public class DrillEditorScreen : MonoBehaviour
             panel.SetActive(true);
         }
         
+        // 暂停挖矿地图的视觉旋转（编辑界面不应旋转）
+        MiningMapView miningMapView = FindObjectOfType<MiningMapView>();
+        if (miningMapView != null)
+        {
+            miningMapView.SetVisualRotationPaused(true);
+        }
+        
         // 备份当前平台数据
         DrillPlatformData currentData = _platformManager.GetPlatformData();
         _backupData = currentData?.Clone();
@@ -148,6 +153,13 @@ public class DrillEditorScreen : MonoBehaviour
         if (panel != null)
         {
             panel.SetActive(false);
+        }
+        
+        // 恢复挖矿地图的视觉旋转
+        MiningMapView miningMapView = FindObjectOfType<MiningMapView>();
+        if (miningMapView != null)
+        {
+            miningMapView.SetVisualRotationPaused(false);
         }
         
         ClearSelection();
@@ -178,7 +190,6 @@ public class DrillEditorScreen : MonoBehaviour
         _selectedShape = shape;
         _pendingShapeId = null;
         _pendingShapeRotation = 0;
-        
         if (shape != null)
         {
             DrillShapeConfig config = ConfigManager.Instance.GetDrillShapeConfig(shape.shapeId);
@@ -235,7 +246,7 @@ public class DrillEditorScreen : MonoBehaviour
             return;
         }
         
-        // 使用当前记录的旋转角度尝试放置
+        // 存储用户选择的旋转（不修改），显示时再应用补偿
         PlaceResult result = _platformManager.TryPlaceShape(_pendingShapeId, position, _pendingShapeRotation);
         
         if (result.success)
@@ -341,7 +352,7 @@ public class DrillEditorScreen : MonoBehaviour
         if (result.success)
         {
             RefreshViews();
-            UpdateStatusText(clockwise ? "造型顺时针旋转90°" : "造型逆时针旋转90°");
+            UpdateStatusText(clockwise ? "造型顺时针旋转60°" : "造型逆时针旋转60°");
         }
         else
         {
@@ -464,9 +475,10 @@ public class DrillEditorScreen : MonoBehaviour
             return;
         }
 
+        const int rotationStep = 60;
         _pendingShapeRotation = clockwise
-            ? (_pendingShapeRotation + 90) % 360
-            : (_pendingShapeRotation + 270) % 360;
+            ? (_pendingShapeRotation + rotationStep) % 360
+            : (_pendingShapeRotation + (360 - rotationStep)) % 360;
 
         // 旋转后尝试刷新当前鼠标所在格子的放置预览
         if (platformView != null)
@@ -474,7 +486,7 @@ public class DrillEditorScreen : MonoBehaviour
             platformView.RefreshPendingPreviewAtMousePosition();
         }
 
-        UpdateStatusText("预览造型顺时针旋转90°");
+        UpdateStatusText("预览造型顺时针旋转60°");
     }
 
     /// <summary>

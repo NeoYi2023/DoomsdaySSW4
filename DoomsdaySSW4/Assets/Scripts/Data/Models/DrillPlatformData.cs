@@ -35,6 +35,11 @@ public class DrillPlatformData
     public List<PlacedDrillBit> insertedBits = new List<PlacedDrillBit>();
     
     /// <summary>
+    /// 旋转挖掘中心点（可在钻头编辑界面调整，默认 (4,5)）
+    /// </summary>
+    public Vector2Int rotationCenter = new Vector2Int(4, 5);
+    
+    /// <summary>
     /// 获取平台上所有被占用的格子坐标
     /// </summary>
     /// <param name="getShapeConfig">获取造型配置的委托</param>
@@ -222,6 +227,7 @@ public class DrillPlatformData
     public DrillPlatformData Clone()
     {
         DrillPlatformData clone = new DrillPlatformData();
+        clone.rotationCenter = this.rotationCenter;
         clone.availableShapeIds = new List<string>(this.availableShapeIds);
         
         foreach (var shape in this.placedShapes)

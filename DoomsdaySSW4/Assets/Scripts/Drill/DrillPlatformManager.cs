@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -281,8 +280,9 @@ public class DrillPlatformManager : MonoBehaviour
             return new PlaceResult { success = false, errorMessage = "找不到造型配置" };
         }
 
-        // 计算新的旋转角度
-        int newRotation = clockwise ? (shape.rotation + 90) % 360 : (shape.rotation + 270) % 360;
+        // 计算新的旋转角度（步长 60°）
+        const int rotationStep = 60;
+        int newRotation = clockwise ? (shape.rotation + rotationStep) % 360 : (shape.rotation + (360 - rotationStep)) % 360;
 
         // 创建临时实例检查碰撞
         PlacedDrillShape tempShape = shape.Clone();
@@ -377,7 +377,7 @@ public class DrillPlatformManager : MonoBehaviour
             }
         }
 
-        // 移动成功
+        // 移动成功（不修改存储的rotation，显示时再应用补偿）
         Vector2Int oldPosition = shape.position;
         shape.position = newPosition;
 

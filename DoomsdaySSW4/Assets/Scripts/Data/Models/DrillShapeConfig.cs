@@ -53,7 +53,7 @@ public class DrillShapeConfig
     /// <summary>
     /// 获取旋转后的格子坐标列表
     /// </summary>
-    /// <param name="rotation">旋转角度（0/90/180/270）</param>
+    /// <param name="rotation">旋转角度（0/60/120/180/240/300）</param>
     /// <returns>旋转后的格子坐标列表</returns>
     public List<Vector2Int> GetRotatedCells(int rotation)
     {
@@ -124,7 +124,7 @@ public static class DrillShapeRotator
     /// 旋转格子坐标列表
     /// </summary>
     /// <param name="cells">原始格子坐标列表</param>
-    /// <param name="degrees">旋转角度（0/90/180/270）</param>
+    /// <param name="degrees">旋转角度（0/60/120/180/240/300 等，支持 60 的倍数）</param>
     /// <returns>旋转后的格子坐标列表</returns>
     public static List<Vector2Int> RotateCells(List<Vector2Int> cells, int degrees)
     {
@@ -140,13 +140,13 @@ public static class DrillShapeRotator
             Vector2Int rotated = RotatePoint(cell, degrees);
             rotatedCells.Add(rotated);
         }
-        
+
         return rotatedCells;
     }
     
     /// <summary>
-    /// 旋转单个点
-    /// 90度顺时针旋转公式：(x, y) -> (y, -x)
+    /// 旋转单个点（顺时针）。支持 0/60/120/180/240/300 等 60 的倍数。
+    /// 60° 步长使用六边形轴向旋转，与平台 HexLayoutGroup（odd-r 平顶）一致，避免笛卡尔取整导致奇数次旋转造型错位。
     /// </summary>
     private static Vector2Int RotatePoint(Vector2Int point, int degrees)
     {
@@ -154,16 +154,45 @@ public static class DrillShapeRotator
         {
             case 0:
                 return point;
-            case 90:
-                return new Vector2Int(point.y, -point.x);
+            case 60:
+                return HexRotate60Clockwise(point);
+            case 120:
+                return HexRotate60Clockwise(HexRotate60Clockwise(point));
             case 180:
-                return new Vector2Int(-point.x, -point.y);
-            case 270:
-                return new Vector2Int(-point.y, point.x);
+                return HexRotate60Clockwise(HexRotate60Clockwise(HexRotate60Clockwise(point)));
+            case 240:
+                return HexRotate60Clockwise(HexRotate60Clockwise(HexRotate60Clockwise(HexRotate60Clockwise(point))));
+            case 300:
+                return HexRotate60Clockwise(HexRotate60Clockwise(HexRotate60Clockwise(HexRotate60Clockwise(HexRotate60Clockwise(point)))));
             default:
-                Debug.LogWarning($"不支持的旋转角度: {degrees}，仅支持0/90/180/270");
-                return point;
+                // 兼容旧 90° 步长及任意角度（按浮点旋转后取整）
+                return RotatePointByAngle(point, (float)degrees);
         }
+    }
+
+    /// <summary>
+    /// 轴向坐标下顺时针 60° 旋转。
+    /// 配置 cells 本身是 axial (q,r)，GetOccupiedCells 也按 axial 消费，
+    /// 因此无需 offset↔axial 转换，直接做轴向旋转: (q,r)→(q+r,-q)。
+    /// </summary>
+    private static Vector2Int HexRotate60Clockwise(Vector2Int point)
+    {
+        int q = point.x;
+        int r = point.y;
+        return new Vector2Int(q + r, -q);
+    }
+
+    /// <summary>
+    /// 按任意角度顺时针旋转单点（弧度旋转后四舍五入到整数格）。仅用于非 60° 倍数的兼容路径。
+    /// </summary>
+    private static Vector2Int RotatePointByAngle(Vector2Int point, float degrees)
+    {
+        float rad = degrees * Mathf.Deg2Rad;
+        float cos = Mathf.Cos(rad);
+        float sin = Mathf.Sin(rad);
+        int x2 = Mathf.RoundToInt(point.x * cos + point.y * sin);
+        int y2 = Mathf.RoundToInt(-point.x * sin + point.y * cos);
+        return new Vector2Int(x2, y2);
     }
 
     /// <summary>
@@ -171,7 +200,7 @@ public static class DrillShapeRotator
     /// </summary>
     /// <param name="point">待旋转的点</param>
     /// <param name="center">旋转中心</param>
-    /// <param name="degrees">旋转角度（0/90/180/270）</param>
+    /// <param name="degrees">旋转角度（0/60/120/180/240/300 等）</param>
     public static Vector2Int RotatePointAroundCenter(Vector2Int point, Vector2Int center, int degrees)
     {
         int dx = point.x - center.x;
@@ -185,7 +214,7 @@ public static class DrillShapeRotator
     /// </summary>
     /// <param name="cells">原始格子坐标列表</param>
     /// <param name="center">旋转中心</param>
-    /// <param name="degrees">旋转角度（0/90/180/270）</param>
+    /// <param name="degrees">旋转角度（0/60/120/180/240/300 等）</param>
     public static List<Vector2Int> RotateCellsAroundCenter(List<Vector2Int> cells, Vector2Int center, int degrees)
     {
         if (cells == null) return new List<Vector2Int>();

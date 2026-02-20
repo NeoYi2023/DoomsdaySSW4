@@ -1641,6 +1641,101 @@ public class RunHistory
 }
 ```
 
+### 3.20 旋转挖掘系统（圆环扫掠攻击）
+
+本节定义挖掘阶段的核心机制：钻机围绕中心格做360度旋转扫掠攻击，替代原有的按回合90度离散旋转方案。
+
+#### 3.20.1 核心概念
+
+- **旋转中心 (rotationCenter)**：`DrillPlatformData.rotationCenter`，默认 `(4,5)`
+- **扫掠半径 (sweepRadius)**：钻机平台上每个占用格到旋转中心的欧氏距离
+- **圆环匹配容差 (radiusTolerance)**：`0.71`（约 `sqrt(2)/2`，半个格子对角线长度），用于判定矿石格是否在某个扫掠半径的圆环上
+- **旋转角速度**：60度/秒，一圈360度耗时6秒
+
+#### 3.20.2 圆环扫掠攻击计算
+
+每个回合点击"开始挖掘"后，钻机做一次完整的360度旋转。旋转过程中，平台上每个钻头格以其到中心的距离为半径画圆，圆上的所有矿石格都会被攻击。
+
+**公式**：
+```
+// 对于钻机平台上每个被造型占用的格子 drillCell:
+drillRadius = sqrt((drillCell.x - center.x)^2 + (drillCell.y - center.y)^2)
+
+// 对于挖矿地图上每个矿石格 mapCell:
+mapRadius = sqrt((mapCell.x - center.x)^2 + (mapCell.y - center.y)^2)
+
+// 若 |drillRadius - mapRadius| < 0.71，则 mapCell 被 drillCell 攻击
+// 攻击强度 = drillCell 所属造型的最终攻击强度（含造型特性、永久加成、钻头加成）
+```
+
+**叠加规则**：同一矿石格可被多个钻头格命中（它们位于相同或相近半径），攻击强度**累加**。
+
+#### 3.20.3 攻击触发角度
+
+为实现旋转过程中逐步表现攻击效果，需要计算每个矿石格相对于旋转中心的角度：
+
+```csharp
+// 计算格子相对于中心的角度（0~360度，顺时针，12点钟方向为0度）
+float angle = Mathf.Atan2(cell.x - center.x, cell.y - center.y) * Mathf.Rad2Deg;
+if (angle < 0) angle += 360f;
+```
+
+旋转动画过程中，当当前旋转角度经过某矿石格的触发角度时，播放该格的攻击特效（晃动+高亮+扣血）。
+
+#### 3.20.4 旋转动画流程
+
+```
+T=0.0s  │ 钻机开始旋转（60度/秒，顺时针）
+        │ platformGridRoot 从 0° 旋转到 360°
+        ↓
+T=0~6s  │ 旋转过程中：
+        │ - 每帧检查当前角度是否经过了某些矿石格的触发角度
+        │ - 经过时：对该矿石格施加伤害，播放晃动+高亮特效
+        │ - 完全挖掉的格子播放消失动画
+        ↓
+T=6.0s  │ 旋转一圈完成
+        │ 检查扫掠范围内是否还有未挖掉的矿石
+        ↓
+        │ 有残留矿石 → 本回合结束，结算金钱/能源
+        │ 所有矿石已挖掉 → 刷出下一层矿石，继续旋转一圈
+```
+
+#### 3.20.5 自动续层规则
+
+旋转一圈后，检查扫掠范围内（所有半径圆环覆盖的矿石格）是否还有未被挖空的矿石：
+- **有残留矿石**：本回合结束，执行正常的回合结算流程（金钱→还债、能源累计、任务进度更新）
+- **所有矿石已挖空**：本回合未结束，自动切换到下一层矿石地图，继续旋转一圈。循环直到出现残留矿石或达到最大层数
+
+#### 3.20.6 数据结构
+
+```csharp
+/// <summary>
+/// 圆环扫掠攻击结果
+/// </summary>
+[System.Serializable]
+public class CircularSweepResult
+{
+    /// <summary>格子坐标 → 累加后的攻击信息</summary>
+    public Dictionary<Vector2Int, CellAttackInfo> attackMap;
+
+    /// <summary>角度(0~360) → 该角度触发攻击的目标格列表（用于动画按角度触发）</summary>
+    public Dictionary<float, List<Vector2Int>> angleToTargets;
+
+    /// <summary>所有钻头格的扫掠半径集合</summary>
+    public HashSet<float> attackRadii;
+    
+    /// <summary>扫掠范围内所有被覆盖的格子坐标（含矿石和非矿石）</summary>
+    public HashSet<Vector2Int> sweepRange;
+}
+```
+
+#### 3.20.7 与旧系统的关系
+
+- `DrillAttackCalculator.GetMiningRotationDegreesFromTurn()` 标记为 `[Obsolete]`，仅保留向后兼容
+- `DrillAttackCalculator.CalculateAttackMap()` 保留，新增 `CalculateCircularSweepAttackMap()` 用于旋转挖掘
+- `MiningManager.AttackOresWithShapeSystem()` 保留，新增 `AttackOresWithCircularSweep()` 替代回合攻击逻辑
+- `MiningMapView.Update()` 中的持续旋转逻辑移除，改为由 `TurnManager` 按需触发的 `PlayRotationMiningAnimation()` 协程
+
 ## 4. 接口/API设计
 
 ### 4.1 游戏引擎接口（Unity MonoBehaviour）
@@ -3129,9 +3224,13 @@ UI系统
    - 挖掘深度（层数）影响矿石类型、硬度和所需额外属性
   - **旋转挖掘规则**（造型系统启用时）：
      - 每回合执行挖掘时，在平台已放置造型的静态布局基础上，对**整张攻击范围**再施加一次「挖掘旋转」：以平台逻辑中心为旋转中心（默认 9×9 下为 (4,4)），顺时针旋转 `(currentTurn - 1) % 4 * 90` 度（即第 1 回合 0°、第 2 回合 90°、第 3 回合 180°、第 4 回合 270°，第 5 回合起循环）。
-     - 旋转中心：与层中心一致，由常量 `(LAYER_WIDTH/2, LAYER_HEIGHT/2)` 或 `((LAYER_WIDTH-1)/2, (LAYER_HEIGHT-1)/2)` 定义（默认 (4,4)）。
+     - 旋转中心：存储在 `DrillPlatformData.rotationCenter` 中，默认 `(4,5)`，可在钻头编辑界面调整。
      - 高亮与迷雾：挖矿地图高亮、迷雾揭示范围按**当前回合**对应的挖掘旋转后的攻击格子计算，与当回合实际受击格子一致。
      - 层挖完判定：当**当前回合相位**对应的旋转后攻击范围内，所有矿石均已被挖掉时，允许切换到下一层；不要求四个相位对应的格子全部挖完。
+     - **自动挖矿与旋转挖掘的交互**：
+       - 自动挖矿开启后，每回合结束时不因"当前层未挖完"而立即停止，而是继续进入下一回合（使用新的旋转角度攻击不同的矿石位置）。
+       - 自动挖矿仅在以下条件下停止：（1）达到回合限制；（2）当前回合没有任何矿石被攻击到（当前旋转范围内无可挖矿石且层也没切换）。
+       - 每回合结束并开始新回合后，立即刷新挖矿地图高亮，使高亮区域与新回合的旋转攻击范围一致。
   - **挖矿地图尺寸与六边形布局规则**：
      - **逻辑网格**：每层地图的逻辑尺寸由常量 `LAYER_WIDTH` 与 `LAYER_HEIGHT` 决定（默认 9 列 × 9 行），用于存储矿石数据和挖掘结果。
      - **视觉布局组件**：在 UI 层统一使用 `HexLayoutGroup` 组件将上述 `LAYER_WIDTH × LAYER_HEIGHT` 个逻辑格点排布为平顶六边形蜂窝，而不再由手写函数直接计算 anchoredPosition。

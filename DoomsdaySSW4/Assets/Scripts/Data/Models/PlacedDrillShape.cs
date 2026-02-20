@@ -58,20 +58,29 @@ public class PlacedDrillShape
     }
     
     /// <summary>
-    /// 获取该实例在平台上占用的所有格子坐标（应用旋转和位置偏移后）
+    /// 获取该实例在平台上占用的所有格子坐标（应用旋转和位置偏移后）。
+    /// 使用立方体坐标（cube coordinates）中转，确保六边形偏移坐标下
+    /// 奇偶行放置同一造型的视觉形状一致（消除 stagger 导致的视觉翻转）。
     /// </summary>
-    /// <param name="shapeConfig">造型配置</param>
-    /// <returns>占用的格子坐标列表</returns>
     public List<Vector2Int> GetOccupiedCells(DrillShapeConfig shapeConfig)
     {
         if (shapeConfig == null) return new List<Vector2Int>();
         
         List<Vector2Int> rotatedCells = shapeConfig.GetRotatedCells(rotation);
         List<Vector2Int> occupiedCells = new List<Vector2Int>();
+
+        // odd-r offset → cube: q = col - (row - (row & 1)) / 2, r = row
+        int anchorQ = position.x - (position.y - (position.y & 1)) / 2;
+        int anchorR = position.y;
         
         foreach (var cell in rotatedCells)
         {
-            occupiedCells.Add(position + cell);
+            int targetQ = anchorQ + cell.x;
+            int targetR = anchorR + cell.y;
+            // cube → odd-r offset: col = q + (r - (r & 1)) / 2, row = r
+            int col = targetQ + (targetR - (targetR & 1)) / 2;
+            int row = targetR;
+            occupiedCells.Add(new Vector2Int(col, row));
         }
         
         return occupiedCells;

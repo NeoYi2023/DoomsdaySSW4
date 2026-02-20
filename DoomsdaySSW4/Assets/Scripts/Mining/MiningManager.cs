@@ -410,23 +410,19 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 使用造型系统获取攻击格子列表（含旋转挖掘相位）
+    /// 使用圆环扫掠系统获取攻击格子列表
     /// </summary>
     private List<AttackedTileInfo> GetTilesToAttackWithShapeSystem(DrillData drill, MiningLayerData layer)
     {
         List<AttackedTileInfo> tilesToAttack = new List<AttackedTileInfo>();
-        int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
-        int? miningRotation = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
-        if (miningRotation == 0) miningRotation = null;
 
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        Dictionary<Vector2Int, CellAttackInfo> attackMap = calculator.CalculateAttackMap(drill, miningRotation);
+        CircularSweepResult sweepResult = calculator.CalculateCircularSweepAttackMap(drill, LAYER_WIDTH, LAYER_HEIGHT);
 
-        foreach (var kvp in attackMap)
+        foreach (var kvp in sweepResult.attackMap)
         {
             Vector2Int pos = kvp.Key;
             
-            // 检查是否在地图范围内
             if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
                 continue;
 
@@ -488,7 +484,7 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 攻击范围内的矿石（每回合执行）
+    /// 攻击范围内的矿石（每回合执行）。使用圆环扫掠攻击系统。
     /// </summary>
     public MiningResult AttackOresInRange(DrillData drill, int layerDepth)
     {
@@ -505,10 +501,10 @@ public class MiningManager : MonoBehaviour
             return new MiningResult();
         }
 
-        // 使用造型系统
+        // 使用圆环扫掠攻击系统
         if (drill.UsesShapeSystem())
         {
-            return AttackOresWithShapeSystem(drill, layer, layerDepth);
+            return AttackOresWithCircularSweep(drill, layer, layerDepth);
         }
         
         // 向后兼容：使用旧的矩形范围计算
@@ -516,7 +512,109 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 使用造型系统攻击矿石
+    /// 使用圆环扫掠系统攻击矿石。每个钻头格以其到中心的距离为半径，
+    /// 旋转一周覆盖同半径圆环上的所有矿石格。
+    /// </summary>
+    private MiningResult AttackOresWithCircularSweep(DrillData drill, MiningLayerData layer, int layerDepth)
+    {
+        MiningResult result = new MiningResult
+        {
+            success = true,
+            minedOres = new List<OreData>(),
+            moneyGained = 0,
+            energyGained = 0,
+            partiallyDamagedOres = new List<OreData>()
+        };
+
+        DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
+        CircularSweepResult sweepResult = calculator.CalculateCircularSweepAttackMap(drill, LAYER_WIDTH, LAYER_HEIGHT);
+
+        foreach (var kvp in sweepResult.attackMap)
+        {
+            Vector2Int pos = kvp.Key;
+            int attackValue = kvp.Value.attackStrength;
+
+            if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
+                continue;
+
+            MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
+            if (tile == null || tile.tileType != TileType.Ore || tile.isMined)
+                continue;
+
+            string oreType = GetOreTypeString(tile.mineralType);
+            int finalAttackValue = calculator.CalculateCircularSweepStrengthForOre(pos, oreType, drill, LAYER_WIDTH, LAYER_HEIGHT);
+            if (finalAttackValue == 0)
+            {
+                finalAttackValue = attackValue;
+            }
+
+            tile.hardness -= finalAttackValue;
+
+            OreConfig oreConfig = _configManager.GetOreConfig(GetOreIdFromMineralType(tile.mineralType));
+            string currentOreId = oreConfig?.oreId ?? "";
+            int oreValue = oreConfig?.value ?? 0;
+            bool isFullyMined = tile.hardness <= 0;
+
+            result.attackedTiles.Add(new AttackedTileInfo
+            {
+                position = pos,
+                attackStrength = finalAttackValue,
+                isFullyMined = isFullyMined,
+                remainingHardness = Mathf.Max(0, tile.hardness),
+                oreId = currentOreId,
+                moneyValue = isFullyMined ? oreValue : 0
+            });
+
+            if (isFullyMined)
+            {
+                OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
+                if (ore != null)
+                {
+                    tile.isMined = true;
+                    ore.isMined = true;
+                    result.minedOres.Add(ore);
+
+                    if (!_miningData.minerals.ContainsKey(ore.mineralType))
+                        _miningData.minerals[ore.mineralType] = 0;
+                    _miningData.minerals[ore.mineralType]++;
+
+                    if (ore.isEnergyOre)
+                    {
+                        result.energyGained += ore.energyValue;
+                    }
+                    else
+                    {
+                        result.moneyGained += ore.value;
+                    }
+
+                    DrillBitEffectManager effectManager = DrillBitEffectManager.Instance;
+                    if (effectManager != null)
+                    {
+                        List<BitEffectDamage> effectDamages = effectManager.ProcessBitEffects(
+                            pos, layerDepth, currentOreId);
+                        foreach (var effectDamage in effectDamages)
+                        {
+                            ApplyBitEffectDamage(effectDamage, layer, layerDepth, result);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
+                if (ore != null)
+                {
+                    ore.currentHardness = tile.hardness;
+                    result.partiallyDamagedOres.Add(ore);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// [Legacy] 使用造型系统攻击矿石（已被 AttackOresWithCircularSweep 替代）
     /// </summary>
     private MiningResult AttackOresWithShapeSystem(DrillData drill, MiningLayerData layer, int layerDepth)
     {
@@ -530,7 +628,9 @@ public class MiningManager : MonoBehaviour
         };
 
         int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
+        #pragma warning disable 612, 618
         int miningRotationDegrees = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
+        #pragma warning restore 612, 618
         int? miningRotation = miningRotationDegrees != 0 ? (int?)miningRotationDegrees : null;
 
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
@@ -841,7 +941,7 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 检查指定层是否完全挖完（攻击范围内的所有矿石都被挖掉）
+    /// 检查指定层是否完全挖完（圆环扫掠范围内的所有矿石都被挖掉）
     /// </summary>
     public bool IsLayerFullyMined(int layerDepth)
     {
@@ -852,48 +952,39 @@ public class MiningManager : MonoBehaviour
         if (layer == null || layer.tiles == null)
             return false;
 
-        // 获取当前钻头信息
         DrillManager drillManager = DrillManager.Instance;
         DrillData drill = drillManager?.GetCurrentDrill();
         if (drill == null)
         {
-            // 如果没有钻头，检查全层（向后兼容）
             bool hasUnminedOre = layer.tiles.Any(t => t.tileType == TileType.Ore && !t.isMined);
             return !hasUnminedOre;
         }
 
-        // 使用造型系统（旋转挖掘：按当前回合相位对应的攻击范围判定）
         if (drill.UsesShapeSystem())
         {
-            int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
-            return IsLayerFullyMinedWithShapeSystem(layer, currentTurn);
+            return IsLayerFullyMinedWithCircularSweep(layer);
         }
 
-        // 向后兼容：使用旧的矩形范围计算
         return IsLayerFullyMinedLegacy(drill, layer);
     }
 
     /// <summary>
-    /// 使用造型系统检查层是否挖完（当前回合相位对应的旋转后攻击范围内矿石均已被挖掉即可换层）
+    /// 使用圆环扫掠范围检查层是否挖完
     /// </summary>
-    private bool IsLayerFullyMinedWithShapeSystem(MiningLayerData layer, int currentTurn)
+    private bool IsLayerFullyMinedWithCircularSweep(MiningLayerData layer)
     {
-        int miningRotationDegrees = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
-        int? miningRotation = miningRotationDegrees != 0 ? (int?)miningRotationDegrees : null;
-
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        HashSet<Vector2Int> attackRange = calculator.GetAttackRange(miningRotation);
+        HashSet<Vector2Int> sweepRange = calculator.GetCircularSweepRange(LAYER_WIDTH, LAYER_HEIGHT);
 
-        foreach (var pos in attackRange)
+        foreach (var pos in sweepRange)
         {
-            // 检查是否在地图范围内
             if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
                 continue;
 
             MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
             if (tile != null && tile.tileType == TileType.Ore && !tile.isMined)
             {
-                return false; // 还有未挖的矿石
+                return false;
             }
         }
 

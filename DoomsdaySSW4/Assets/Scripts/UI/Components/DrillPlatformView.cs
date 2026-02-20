@@ -171,6 +171,12 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             exitEntry.callback.AddListener((data) => OnCellHoverExit());
             trigger.triggers.Add(exitEntry);
 
+            // 将格子的 PointerDown/Drag/PointerUp 转发给本 View，使点击格子时也能触发拖拽移动
+            DrillPlatformCellInputForwarder forwarder = cellObj.GetComponent<DrillPlatformCellInputForwarder>();
+            if (forwarder == null)
+                forwarder = cellObj.AddComponent<DrillPlatformCellInputForwarder>();
+            forwarder.SetPlatformView(this);
+
             _cellObjects[pos] = cellObj;
         }
 
@@ -206,14 +212,13 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             GameObject cellObj = kvp.Value;
             
             if (cellObj == null) continue;
-            
             Image image = cellObj.GetComponent<Image>();
             if (image == null) continue;
 
             if (highlightedCells.Contains(pos))
-            {
-                image.color = highlightColor;
-            }
+        {
+            image.color = highlightColor;
+        }
             else if (occupiedCells.Contains(pos))
             {
                 image.color = occupiedColor;
@@ -309,7 +314,11 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
     }
 
     #region 指针事件（拖拽与右键旋转）
-    public void OnPointerDown(PointerEventData eventData)
+
+    /// <summary>
+    /// 由格子转发或 View 自身收到时调用，执行按下逻辑（支持从格子点击触发拖拽）
+    /// </summary>
+    public void HandleCellPointerDown(PointerEventData eventData)
     {
         if (eventData.button != PointerEventData.InputButton.Left) return;
 
@@ -350,7 +359,10 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         }
     }
 
-    public void OnDrag(PointerEventData eventData)
+    /// <summary>
+    /// 由格子转发或 View 自身收到时调用，执行拖拽逻辑
+    /// </summary>
+    public void HandleCellDrag(PointerEventData eventData)
     {
         if (!_isDragging) return;
         if (eventData.button != PointerEventData.InputButton.Left) return;
@@ -382,7 +394,10 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         }
     }
 
-    public void OnPointerUp(PointerEventData eventData)
+    /// <summary>
+    /// 由格子转发或 View 自身收到时调用，执行抬起逻辑
+    /// </summary>
+    public void HandleCellPointerUp(PointerEventData eventData)
     {
         if (!_isDragging) return;
         if (eventData.button != PointerEventData.InputButton.Left) return;
@@ -399,6 +414,21 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
         _lastDragGridPos = null;
         _hoveredCell = null;
         ClearHoverPreview();
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        HandleCellPointerDown(eventData);
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        HandleCellDrag(eventData);
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        HandleCellPointerUp(eventData);
     }
 
     public void OnPointerClick(PointerEventData eventData)
@@ -441,7 +471,6 @@ public class DrillPlatformView : MonoBehaviour, IPointerDownHandler, IDragHandle
             return;
         }
 
-        // 先验证放置合法性
         PlaceResult result = _platformManager.ValidatePlacement(shapeId, position, rotation);
 
         DrillShapeConfig config = _configManager.GetDrillShapeConfig(shapeId);

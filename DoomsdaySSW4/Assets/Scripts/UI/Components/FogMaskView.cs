@@ -482,16 +482,13 @@ public class FogMaskView : MonoBehaviour
             return new HashSet<Vector2Int>();
         }
         
-        // 使用造型系统获取攻击范围（含当前回合旋转挖掘相位）
+        // 使用圆环扫掠系统获取攻击范围
         if (drill.UsesShapeSystem())
         {
             DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
             if (calculator != null)
             {
-                int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
-                int miningRotationDegrees = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
-                int? miningRotation = miningRotationDegrees != 0 ? (int?)miningRotationDegrees : null;
-                return calculator.GetAttackRange(miningRotation);
+                return calculator.GetCircularSweepRange(MiningManager.LAYER_WIDTH, MiningManager.LAYER_HEIGHT);
             }
         }
         
