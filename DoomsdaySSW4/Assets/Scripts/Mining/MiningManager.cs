@@ -410,14 +410,17 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 使用造型系统获取攻击格子列表
+    /// 使用造型系统获取攻击格子列表（含旋转挖掘相位）
     /// </summary>
     private List<AttackedTileInfo> GetTilesToAttackWithShapeSystem(DrillData drill, MiningLayerData layer)
     {
         List<AttackedTileInfo> tilesToAttack = new List<AttackedTileInfo>();
-        
+        int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
+        int? miningRotation = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
+        if (miningRotation == 0) miningRotation = null;
+
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        Dictionary<Vector2Int, CellAttackInfo> attackMap = calculator.CalculateAttackMap(drill);
+        Dictionary<Vector2Int, CellAttackInfo> attackMap = calculator.CalculateAttackMap(drill, miningRotation);
 
         foreach (var kvp in attackMap)
         {
@@ -526,8 +529,12 @@ public class MiningManager : MonoBehaviour
             partiallyDamagedOres = new List<OreData>()
         };
 
+        int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
+        int miningRotationDegrees = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
+        int? miningRotation = miningRotationDegrees != 0 ? (int?)miningRotationDegrees : null;
+
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        Dictionary<Vector2Int, CellAttackInfo> attackMap = calculator.CalculateAttackMap(drill);
+        Dictionary<Vector2Int, CellAttackInfo> attackMap = calculator.CalculateAttackMap(drill, miningRotation);
 
         foreach (var kvp in attackMap)
         {
@@ -545,8 +552,8 @@ public class MiningManager : MonoBehaviour
             // 获取矿石类型用于条件特性计算
             string oreType = GetOreTypeString(tile.mineralType);
             
-            // 重新计算考虑矿石类型的攻击强度
-            int finalAttackValue = calculator.CalculateAttackStrengthForOre(pos, oreType, drill);
+            // 重新计算考虑矿石类型的攻击强度（传入挖掘旋转以便逆旋转查造型）
+            int finalAttackValue = calculator.CalculateAttackStrengthForOre(pos, oreType, drill, miningRotation);
             if (finalAttackValue == 0)
             {
                 finalAttackValue = attackValue; // 回退到基础攻击值
@@ -855,10 +862,11 @@ public class MiningManager : MonoBehaviour
             return !hasUnminedOre;
         }
 
-        // 使用造型系统
+        // 使用造型系统（旋转挖掘：按当前回合相位对应的攻击范围判定）
         if (drill.UsesShapeSystem())
         {
-            return IsLayerFullyMinedWithShapeSystem(layer);
+            int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
+            return IsLayerFullyMinedWithShapeSystem(layer, currentTurn);
         }
 
         // 向后兼容：使用旧的矩形范围计算
@@ -866,12 +874,15 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 使用造型系统检查层是否挖完
+    /// 使用造型系统检查层是否挖完（当前回合相位对应的旋转后攻击范围内矿石均已被挖掉即可换层）
     /// </summary>
-    private bool IsLayerFullyMinedWithShapeSystem(MiningLayerData layer)
+    private bool IsLayerFullyMinedWithShapeSystem(MiningLayerData layer, int currentTurn)
     {
+        int miningRotationDegrees = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
+        int? miningRotation = miningRotationDegrees != 0 ? (int?)miningRotationDegrees : null;
+
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        HashSet<Vector2Int> attackRange = calculator.GetAttackRange();
+        HashSet<Vector2Int> attackRange = calculator.GetAttackRange(miningRotation);
 
         foreach (var pos in attackRange)
         {

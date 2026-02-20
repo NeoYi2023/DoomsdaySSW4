@@ -45,54 +45,81 @@ public class DrillAttackCalculator : MonoBehaviour
     }
 
     /// <summary>
+    /// 平台旋转中心（与挖掘地图层中心一致，默认 9×9 下为 (4,4)）
+    /// </summary>
+    private static Vector2Int GetPlatformCenter()
+    {
+        int c = (DrillPlatformData.PLATFORM_SIZE - 1) / 2;
+        return new Vector2Int(c, c);
+    }
+
+    /// <summary>
+    /// 根据当前回合计算挖掘旋转角度（顺时针度数）。第1回合0°，第2回合90°，第3回合180°，第4回合270°，循环。
+    /// </summary>
+    public static int GetMiningRotationDegreesFromTurn(int currentTurn)
+    {
+        if (currentTurn <= 0) return 0;
+        return ((currentTurn - 1) % 4) * 90;
+    }
+
+    /// <summary>
     /// 获取攻击范围内所有格子及其攻击强度
     /// </summary>
     /// <param name="drillData">钻头数据（用于获取永久加成）</param>
+    /// <param name="miningRotationDegrees">挖掘旋转角度（0/90/180/270），null 表示不旋转（与平台布局一致）</param>
     /// <returns>格子坐标到攻击信息的映射</returns>
-    public Dictionary<Vector2Int, CellAttackInfo> CalculateAttackMap(DrillData drillData = null)
+    public Dictionary<Vector2Int, CellAttackInfo> CalculateAttackMap(DrillData drillData = null, int? miningRotationDegrees = null)
     {
         EnsureManagers();
-        
         Dictionary<Vector2Int, CellAttackInfo> attackMap = new Dictionary<Vector2Int, CellAttackInfo>();
-        
         List<PlacedDrillShape> placedShapes = _platformManager.GetPlacedShapes();
-        
+
         foreach (var placedShape in placedShapes)
         {
             DrillShapeConfig config = _configManager.GetDrillShapeConfig(placedShape.shapeId);
             if (config == null) continue;
-            
+
             List<Vector2Int> occupiedCells = placedShape.GetOccupiedCells(config);
-            
+
             foreach (var cell in occupiedCells)
             {
-                // 计算该格子的攻击强度（考虑钻头加成）
                 int attackStrength = CalculateCellAttackStrength(cell, config, placedShape, drillData);
-                
-                if (!attackMap.ContainsKey(cell))
+                Vector2Int pos = cell;
+                if (miningRotationDegrees.HasValue && miningRotationDegrees.Value != 0)
                 {
-                    attackMap[cell] = new CellAttackInfo
+                    Vector2Int center = GetPlatformCenter();
+                    pos = DrillShapeRotator.RotatePointAroundCenter(cell, center, miningRotationDegrees.Value);
+                }
+                if (!attackMap.ContainsKey(pos))
+                {
+                    attackMap[pos] = new CellAttackInfo
                     {
-                        position = cell,
+                        position = pos,
                         attackStrength = attackStrength,
                         sourceShapeId = placedShape.shapeId,
                         sourceInstanceId = placedShape.instanceId
                     };
                 }
-                // 注意：根据规则不允许重叠，所以这里不会有重复的格子
             }
         }
-        
         return attackMap;
     }
 
     /// <summary>
-    /// 获取攻击范围（仅坐标）
+    /// 获取攻击范围（仅坐标）。可传入挖掘旋转角度以得到当回合旋转后的范围。
     /// </summary>
-    public HashSet<Vector2Int> GetAttackRange()
+    /// <param name="miningRotationDegrees">挖掘旋转角度（0/90/180/270），null 表示不旋转</param>
+    public HashSet<Vector2Int> GetAttackRange(int? miningRotationDegrees = null)
     {
         EnsureManagers();
-        return _platformManager.GetAllOccupiedCells();
+        HashSet<Vector2Int> cells = _platformManager.GetAllOccupiedCells();
+        if (!miningRotationDegrees.HasValue || miningRotationDegrees.Value == 0)
+            return cells;
+        Vector2Int center = GetPlatformCenter();
+        HashSet<Vector2Int> rotated = new HashSet<Vector2Int>();
+        foreach (var cell in cells)
+            rotated.Add(DrillShapeRotator.RotatePointAroundCenter(cell, center, miningRotationDegrees.Value));
+        return rotated;
     }
 
     /// <summary>
@@ -219,35 +246,41 @@ public class DrillAttackCalculator : MonoBehaviour
     /// <summary>
     /// 计算对特定矿石的攻击强度（考虑矿石类型触发的特性和钻头加成）
     /// </summary>
-    /// <param name="position">攻击位置</param>
+    /// <param name="position">攻击位置（若启用挖掘旋转则为旋转后的挖掘坐标）</param>
     /// <param name="oreType">矿石类型</param>
     /// <param name="drillData">钻头数据</param>
+    /// <param name="miningRotationDegrees">挖掘旋转角度，非 null 时将 position 逆旋转到平台坐标再查造型</param>
     /// <returns>攻击强度</returns>
-    public int CalculateAttackStrengthForOre(Vector2Int position, string oreType, DrillData drillData = null)
+    public int CalculateAttackStrengthForOre(Vector2Int position, string oreType, DrillData drillData = null, int? miningRotationDegrees = null)
     {
         EnsureManagers();
-        
-        PlacedDrillShape shape = _platformManager.GetShapeAtPosition(position);
+
+        Vector2Int platformPos = position;
+        if (miningRotationDegrees.HasValue && miningRotationDegrees.Value != 0)
+        {
+            Vector2Int center = GetPlatformCenter();
+            int inverseDegrees = (360 - miningRotationDegrees.Value) % 360;
+            platformPos = DrillShapeRotator.RotatePointAroundCenter(position, center, inverseDegrees);
+        }
+
+        PlacedDrillShape shape = _platformManager.GetShapeAtPosition(platformPos);
         if (shape == null) return 0;
-        
+
         DrillShapeConfig config = _configManager.GetDrillShapeConfig(shape.shapeId);
         if (config == null) return 0;
-        
-        // 使用新的计算方法，考虑钻头加成
-        return CalculateCellAttackStrength(position, config, shape, drillData, oreType);
+
+        return CalculateCellAttackStrength(platformPos, config, shape, drillData, oreType);
     }
 
     /// <summary>
     /// 获取攻击信息列表（用于挖矿动画等）
     /// </summary>
     /// <param name="drillData">钻头数据</param>
-    /// <returns>被攻击的格子信息列表</returns>
-    public List<AttackedTileInfo> GetAttackedTileInfoList(DrillData drillData = null)
+    /// <param name="miningRotationDegrees">挖掘旋转角度，null 表示不旋转</param>
+    public List<AttackedTileInfo> GetAttackedTileInfoList(DrillData drillData = null, int? miningRotationDegrees = null)
     {
         List<AttackedTileInfo> result = new List<AttackedTileInfo>();
-        
-        Dictionary<Vector2Int, CellAttackInfo> attackMap = CalculateAttackMap(drillData);
-        
+        Dictionary<Vector2Int, CellAttackInfo> attackMap = CalculateAttackMap(drillData, miningRotationDegrees);
         foreach (var kvp in attackMap)
         {
             result.Add(new AttackedTileInfo
@@ -256,25 +289,28 @@ public class DrillAttackCalculator : MonoBehaviour
                 attackStrength = kvp.Value.attackStrength
             });
         }
-        
         return result;
     }
 
     /// <summary>
     /// 检查指定位置是否在攻击范围内
     /// </summary>
-    public bool IsInAttackRange(Vector2Int position)
+    /// <param name="miningRotationDegrees">挖掘旋转角度，null 表示不旋转</param>
+    public bool IsInAttackRange(Vector2Int position, int? miningRotationDegrees = null)
     {
         EnsureManagers();
-        return _platformManager.IsCellOccupied(position);
+        if (!miningRotationDegrees.HasValue || miningRotationDegrees.Value == 0)
+            return _platformManager.IsCellOccupied(position);
+        return GetAttackRange(miningRotationDegrees).Contains(position);
     }
 
     /// <summary>
     /// 获取攻击范围的边界框
     /// </summary>
-    public (Vector2Int min, Vector2Int max) GetAttackBounds()
+    /// <param name="miningRotationDegrees">挖掘旋转角度，null 表示不旋转</param>
+    public (Vector2Int min, Vector2Int max) GetAttackBounds(int? miningRotationDegrees = null)
     {
-        HashSet<Vector2Int> cells = GetAttackRange();
+        HashSet<Vector2Int> cells = GetAttackRange(miningRotationDegrees);
         
         if (cells.Count == 0)
         {

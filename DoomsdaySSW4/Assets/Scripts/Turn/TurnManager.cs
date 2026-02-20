@@ -115,7 +115,6 @@ public class TurnManager : MonoBehaviour
             if (miningData != null)
             {
                 int currentLayerDepth = miningData.currentDepth >= 1 ? miningData.currentDepth : 1;
-                
                 // 先执行实际的挖矿逻辑（造成伤害），获取攻击结果
                 result = _miningManager.AttackOresInRange(drill, currentLayerDepth);
                 

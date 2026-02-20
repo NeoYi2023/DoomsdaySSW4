@@ -165,4 +165,34 @@ public static class DrillShapeRotator
                 return point;
         }
     }
+
+    /// <summary>
+    /// 绕指定中心点顺时针旋转单个点
+    /// </summary>
+    /// <param name="point">待旋转的点</param>
+    /// <param name="center">旋转中心</param>
+    /// <param name="degrees">旋转角度（0/90/180/270）</param>
+    public static Vector2Int RotatePointAroundCenter(Vector2Int point, Vector2Int center, int degrees)
+    {
+        int dx = point.x - center.x;
+        int dy = point.y - center.y;
+        Vector2Int rotated = RotatePoint(new Vector2Int(dx, dy), degrees);
+        return new Vector2Int(center.x + rotated.x, center.y + rotated.y);
+    }
+
+    /// <summary>
+    /// 绕指定中心点顺时针旋转格子坐标列表（用于旋转挖掘等）
+    /// </summary>
+    /// <param name="cells">原始格子坐标列表</param>
+    /// <param name="center">旋转中心</param>
+    /// <param name="degrees">旋转角度（0/90/180/270）</param>
+    public static List<Vector2Int> RotateCellsAroundCenter(List<Vector2Int> cells, Vector2Int center, int degrees)
+    {
+        if (cells == null) return new List<Vector2Int>();
+        degrees = ((degrees % 360) + 360) % 360;
+        List<Vector2Int> result = new List<Vector2Int>();
+        foreach (var cell in cells)
+            result.Add(RotatePointAroundCenter(cell, center, degrees));
+        return result;
+    }
 }

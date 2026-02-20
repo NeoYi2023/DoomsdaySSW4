@@ -247,9 +247,13 @@ public class MiningMapView : MonoBehaviour
         }
         
         // 如果找到了FogMaskView，同步布局设置
-        if (fogMaskView != null && gridLayout != null)
+        if (fogMaskView != null)
         {
-            fogMaskView.SyncLayoutWithMiningMap(gridLayout);
+            if (gridLayout != null)
+                fogMaskView.SyncLayoutWithMiningMap(gridLayout);
+            // 六边形模式下传入 PlatformGrid，使迷雾按 DrillPlatformCell 中心对齐
+            if (useHexLayout && platformGridRoot != null)
+                fogMaskView.SetHexLayoutSource(platformGridRoot, mapGridRoot);
         }
     }
 
@@ -411,10 +415,12 @@ public class MiningMapView : MonoBehaviour
             gridLayout.cellSize = new Vector2(60, 60);
         }
 
-        // 同步迷雾遮罩的布局（目前主要用于层级顺序，对六边形/矩形布局均兼容）
+        // 同步迷雾遮罩的布局（层级顺序 + 六边形时传入 platformGridRoot 以对齐中心）
         if (fogMaskView != null)
         {
             fogMaskView.SyncLayoutWithMiningMap(gridLayout);
+            if (useHexLayout && platformGridRoot != null)
+                fogMaskView.SetHexLayoutSource(platformGridRoot, mapGridRoot);
         }
     }
 
@@ -578,6 +584,8 @@ public class MiningMapView : MonoBehaviour
         if (syncCount > 0)
         {
             _syncedWithPlatform = true;
+            if (fogMaskView != null && platformGridRoot != null)
+                fogMaskView.SetHexLayoutSource(platformGridRoot, mapGridRoot);
             Debug.Log($"MiningMapView.SyncCellsWithPlatform: 已通过世界坐标对齐 {syncCount} 个格子，已禁用 MapGridRoot 的 HexLayoutGroup。");
 
             // #region agent log: drill-mining-align-synced
@@ -1118,12 +1126,15 @@ public class MiningMapView : MonoBehaviour
     }
 
     /// <summary>
-    /// 从造型系统获取攻击范围
+    /// 从造型系统获取攻击范围（含当前回合旋转挖掘相位）
     /// </summary>
     private HashSet<Vector2Int> GetAttackRangeFromShapeSystem()
     {
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        return calculator.GetAttackRange();
+        int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
+        int miningRotationDegrees = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
+        int? miningRotation = miningRotationDegrees != 0 ? (int?)miningRotationDegrees : null;
+        return calculator.GetAttackRange(miningRotation);
     }
 
     /// <summary>

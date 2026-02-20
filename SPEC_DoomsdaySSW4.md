@@ -3127,6 +3127,11 @@ UI系统
    - 挖掉的矿石立即转化为金钱（根据配置表的价值）
    - 能源矿石累计到能源值，不转化为金钱
    - 挖掘深度（层数）影响矿石类型、硬度和所需额外属性
+  - **旋转挖掘规则**（造型系统启用时）：
+     - 每回合执行挖掘时，在平台已放置造型的静态布局基础上，对**整张攻击范围**再施加一次「挖掘旋转」：以平台逻辑中心为旋转中心（默认 9×9 下为 (4,4)），顺时针旋转 `(currentTurn - 1) % 4 * 90` 度（即第 1 回合 0°、第 2 回合 90°、第 3 回合 180°、第 4 回合 270°，第 5 回合起循环）。
+     - 旋转中心：与层中心一致，由常量 `(LAYER_WIDTH/2, LAYER_HEIGHT/2)` 或 `((LAYER_WIDTH-1)/2, (LAYER_HEIGHT-1)/2)` 定义（默认 (4,4)）。
+     - 高亮与迷雾：挖矿地图高亮、迷雾揭示范围按**当前回合**对应的挖掘旋转后的攻击格子计算，与当回合实际受击格子一致。
+     - 层挖完判定：当**当前回合相位**对应的旋转后攻击范围内，所有矿石均已被挖掉时，允许切换到下一层；不要求四个相位对应的格子全部挖完。
   - **挖矿地图尺寸与六边形布局规则**：
      - **逻辑网格**：每层地图的逻辑尺寸由常量 `LAYER_WIDTH` 与 `LAYER_HEIGHT` 决定（默认 9 列 × 9 行），用于存储矿石数据和挖掘结果。
      - **视觉布局组件**：在 UI 层统一使用 `HexLayoutGroup` 组件将上述 `LAYER_WIDTH × LAYER_HEIGHT` 个逻辑格点排布为平顶六边形蜂窝，而不再由手写函数直接计算 anchoredPosition。
@@ -3168,11 +3173,16 @@ UI系统
      - 实现方式：使用自定义Shader（UI/FogMask）实现，单个Image组件 + Material，性能更好，效果更平滑
      - 无迷雾区域：钻头格子及其周围一定半径内的格子完全无迷雾（alpha = 0）
      - 渐变效果：从无迷雾区域向外，根据到最近钻头格子的距离线性增加迷雾透明度
-     - 距离计算：在Shader的Fragment Shader中，将UV坐标转换为网格坐标，遍历附近格子（搜索半径 = revealRadius + fadeDistance），通过采样攻击范围纹理（_AttackRangeTex）找到所有钻头格子，计算当前像素到最近钻头格子的欧几里得距离
+     - **六边形格子对齐与距离**（与挖矿地图正六边形布局一致）：
+       - 对齐依据：当使用六边形布局时，迷雾的格子位置与 **PlatformGrid 中 DrillPlatformCell 的中心点** 一致；与 MiningMapView 的静态格子对齐方式相同，均以平台格子的几何中心为基准。
+       - 数据流：C# 端（FogMaskView）在设置 `SetHexLayoutSource(platformGridRoot)` 后，从各 DrillPlatformCell 的 RectTransform 取世界中心，转换到 Fog 的局部空间并归一化到 [0,1]，写入 9×9 纹理 `_HexCenterTex`（R=normX, G=normY）；同时传递 `_FogRectMin`、`_FogRectSize` 供 Shader 将片段局部位置与六边形中心同坐标系比较。
+       - 距离度量：六边形模式下使用 **六边形距离**（odd-r 偏移坐标转立方坐标后的 hex/cube distance），揭示边界呈六边形；revealRadius、fadeDistance 语义为「六边形步数」。
+       - Shader 逻辑：片段先根据局部位置对 81 个六边形中心找最近者，得到所属 (row,col)；再采样 _AttackRangeTex 判断是否在攻击范围内，并计算到最近揭示格的六边形距离，据此计算迷雾 alpha。无 _HexCenterTex 或未设置六边形布局源时，回退为原有「方形网格 + 欧几里得距离」逻辑。
+     - 距离计算（方形回退）：在 Shader 的 Fragment 中，将 UV 转换为网格坐标，遍历附近格子（搜索半径 = revealRadius + fadeDistance），通过采样 _AttackRangeTex 找到钻头格子，计算当前像素到最近钻头格子的欧几里得距离（仅在不使用六边形布局时生效）。
      - 最近钻头格子搜索算法：
        - 对于每个像素，在搜索半径内遍历附近的所有格子
        - 对每个格子采样攻击范围纹理，如果值>0.5则表示是钻头格子
-       - 计算到所有钻头格子的距离，取最小值作为最终距离
+       - 计算到所有钻头格子的距离（六边形模式为六边形距离，否则为欧几里得距离），取最小值作为最终距离
        - 搜索范围限制在ceil(revealRadius + fadeDistance)内，避免全图遍历，优化性能
      - 透明度算法（在Shader中计算）：
        - 如果当前像素在攻击范围内（通过纹理采样判断）：alpha = 0（完全透明，无迷雾）
@@ -3180,9 +3190,9 @@ UI系统
        - 如果距离 > revealRadius + fadeDistance：alpha = maxFogAlpha（完全迷雾）
        - 否则：alpha = (distance - revealRadius) / fadeDistance * maxFogAlpha（线性插值）
      - 攻击范围处理：使用与逻辑网格尺寸一致的 Texture2D（`LAYER_WIDTH × LAYER_HEIGHT`，默认 9×9）存储攻击范围掩码，传递给Shader，Shader中采样纹理判断当前像素是否在攻击范围内，并用于查找最近的钻头格子
-     - 更新机制：实时更新，当钻头位置或攻击范围变化时立即刷新Material参数和攻击范围纹理
-     - 更新时机：地图更新时（UpdateMap调用时）、钻头位置变化时、攻击范围变化时
-     - 配置参数：可通过FogMaskView组件的Inspector配置迷雾颜色、最大透明度、无迷雾半径（revealRadius）、渐变距离（fadeDistance）等
+     - 更新机制：实时更新，当钻头位置或攻击范围变化时立即刷新Material参数和攻击范围纹理；六边形中心纹理（_HexCenterTex）与 _FogRectMin/_FogRectSize 在 SetHexLayoutSource、OnRectTransformDimensionsChange 及 MiningMapView 初始化/SyncCellsWithPlatform 后刷新
+     - 更新时机：地图更新时（UpdateMap调用时）、钻头位置变化时、攻击范围变化时；六边形模式下平台对齐完成后由 MiningMapView 调用 FogMaskView.SetHexLayoutSource(platformGridRoot) 触发迷雾对齐刷新
+     - 配置参数：可通过FogMaskView组件的Inspector配置迷雾颜色、最大透明度、无迷雾半径（revealRadius）、渐变距离（fadeDistance）等；六边形布局源可由 MiningMapView 自动传入 platformGridRoot
      - UI层级：FogMaskContainer作为MiningMapContainer的子对象，遮罩层显示在格子层之上
      - 性能优势：从逐格 GameObject 渲染减少到 1 个遮罩对象，大幅降低 DrawCall，Shader 计算支持像素级渐变，效果更自然；搜索算法针对当前逻辑网格尺寸（默认 9×9 小网格）优化，搜索半径通常为 5-6 格，性能可接受
   - **挖矿地图颜色规则（硬度区间配置表）**：
