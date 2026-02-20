@@ -6,21 +6,29 @@ using System.Collections.Generic;
 /// 迷雾遮罩视图：在挖矿地图上显示黑色迷雾遮罩，从边缘向中心扩展
 /// 钻头格子及其周围区域无迷雾
 /// 使用Shader实现，性能更好，效果更平滑
+/// 支持六边形格子对齐：通过 SetHexLayoutSource(platformGridRoot) 传入 PlatformGrid 后，迷雾按 DrillPlatformCell 中心对齐并使用六边形距离。
 /// </summary>
 public class FogMaskView : MonoBehaviour
 {
     [Header("迷雾设置")]
     [SerializeField] private Color fogColor = new Color(0f, 0f, 0f, 1f); // 迷雾颜色（纯黑色，RGB=0,0,0）
     [SerializeField] private float maxFogAlpha = 1.0f; // 最大迷雾透明度
-    [SerializeField] private float revealRadius = 2.0f; // 钻头周围完全无迷雾的半径（格子数）
-    [SerializeField] private float fadeDistance = 3.0f; // 从无迷雾到完全迷雾的渐变距离（格子数）
+    [SerializeField] private float revealRadius = 2.0f; // 钻头周围完全无迷雾的半径（格子数/六边形步数）
+    [SerializeField] private float fadeDistance = 3.0f; // 从无迷雾到完全迷雾的渐变距离（格子数/六边形步数）
     
     [Header("Shader引用")]
     [SerializeField] private Shader fogMaskShader; // 迷雾Shader（如果为空则自动查找）
     
+    [Header("六边形布局（可选）")]
+    [Tooltip("用于六边形对齐的 PlatformGrid 根节点；可由 MiningMapView 通过 SetHexLayoutSource 设置。为空时使用方形格子逻辑。")]
+    [SerializeField] private RectTransform hexLayoutSource;
+    [Tooltip("可选：地图格子根节点（MapGridRoot）。若设置则优先用 MiningMapCell 世界坐标构建六边形中心，使迷雾与可见地图对齐，避免与 PlatformGrid 不同面板时错位。")]
+    [SerializeField] private RectTransform mapGridRootForFog;
+    
     private Image _fogImage; // 单个Image组件
     private Material _fogMaterial; // Shader Material实例
     private Texture2D _attackRangeTexture; // 攻击范围掩码纹理
+    private Texture2D _hexCenterTexture; // 9x9 六边形中心归一化坐标纹理（R=normX, G=normY）
     private MiningManager _miningManager;
     private DrillManager _drillManager;
     private RectTransform _containerRectTransform;
@@ -93,6 +101,15 @@ public class FogMaskView : MonoBehaviour
         {
             Destroy(_attackRangeTexture);
         }
+        if (_hexCenterTexture != null)
+        {
+            Destroy(_hexCenterTexture);
+        }
+    }
+    
+    private void OnRectTransformDimensionsChange()
+    {
+        RefreshHexCenterTexture();
     }
     
     /// <summary>
@@ -143,6 +160,130 @@ public class FogMaskView : MonoBehaviour
         
         // 初始化Material参数
         UpdateFogMaterial();
+        // 若已设置六边形布局源，构建六边形中心纹理
+        RefreshHexCenterTexture();
+    }
+    
+    /// <summary>
+    /// 设置六边形布局源。可选传入 mapGridRoot，则优先用地图格子世界坐标构建中心（与可见地图对齐）。
+    /// 由 MiningMapView 在初始化或 SyncCellsWithPlatform 后调用。
+    /// </summary>
+    public void SetHexLayoutSource(RectTransform platformGridRoot, RectTransform mapGridRoot = null)
+    {
+        hexLayoutSource = platformGridRoot;
+        mapGridRootForFog = mapGridRoot;
+        RefreshHexCenterTexture();
+    }
+    
+    /// <summary>
+    /// 刷新六边形中心纹理与 FogRect 参数；无 hexLayoutSource 时不设置 _HexCenterTex，Shader 使用方形逻辑。
+    /// </summary>
+    public void RefreshHexCenterTexture()
+    {
+        if (_containerRectTransform == null || _fogMaterial == null)
+            return;
+        
+        if (hexLayoutSource == null)
+        {
+            _fogMaterial.SetFloat("_UseHexLayout", 0f);
+            if (_hexCenterTexture != null)
+            {
+                _fogMaterial.SetTexture("_HexCenterTex", null);
+            }
+            return;
+        }
+        
+        DrillPlatformCell[] cells = hexLayoutSource.GetComponentsInChildren<DrillPlatformCell>(true);
+        if (cells == null || cells.Length == 0)
+        {
+            _fogMaterial.SetFloat("_UseHexLayout", 0f);
+            return;
+        }
+        
+        Dictionary<Vector2Int, RectTransform> platformMap = new Dictionary<Vector2Int, RectTransform>();
+        int maxX = MiningManager.LAYER_WIDTH;
+        int maxY = MiningManager.LAYER_HEIGHT;
+        foreach (var cell in cells)
+        {
+            if (cell == null) continue;
+            Vector2Int pos = cell.GridPosition;
+            if (pos.x < 0 || pos.x >= maxX || pos.y < 0 || pos.y >= maxY) continue;
+            RectTransform rect = cell.transform as RectTransform;
+            if (rect != null && !platformMap.ContainsKey(pos))
+                platformMap[pos] = rect;
+        }
+        
+        if (platformMap.Count == 0)
+        {
+            _fogMaterial.SetFloat("_UseHexLayout", 0f);
+            return;
+        }
+        
+        Dictionary<Vector2Int, RectTransform> mapCellRects = null;
+        if (mapGridRootForFog != null)
+        {
+            var mapCells = mapGridRootForFog.GetComponentsInChildren<MiningMapCell>(true);
+            if (mapCells != null && mapCells.Length > 0)
+            {
+                mapCellRects = new Dictionary<Vector2Int, RectTransform>();
+                foreach (var cell in mapCells)
+                {
+                    if (cell == null) continue;
+                    Vector2Int pos = cell.GridPosition;
+                    if (pos.x < 0 || pos.x >= maxX || pos.y < 0 || pos.y >= maxY) continue;
+                    RectTransform rect = cell.transform as RectTransform;
+                    if (rect != null && !mapCellRects.ContainsKey(pos))
+                        mapCellRects[pos] = rect;
+                }
+            }
+        }
+        
+        Rect fogRect = _containerRectTransform.rect;
+        if (_hexCenterTexture == null)
+        {
+            _hexCenterTexture = new Texture2D(maxX, maxY, TextureFormat.RGBA32, false);
+            _hexCenterTexture.filterMode = FilterMode.Point;
+            _hexCenterTexture.wrapMode = TextureWrapMode.Clamp;
+        }
+        
+        float w = fogRect.width;
+        float h = fogRect.height;
+        if (w <= 0f || h <= 0f)
+        {
+            _fogMaterial.SetFloat("_UseHexLayout", 0f);
+            return;
+        }
+        
+        int validCellCount = 0;
+        for (int row = 0; row < maxY; row++)
+        {
+            for (int col = 0; col < maxX; col++)
+            {
+                Vector2Int pos = new Vector2Int(col, row);
+                RectTransform sourceRect = null;
+                if (mapCellRects != null && mapCellRects.TryGetValue(pos, out sourceRect)) { }
+                else if (platformMap.TryGetValue(pos, out sourceRect)) { }
+                if (sourceRect != null)
+                {
+                    Vector3 worldCenter = sourceRect.TransformPoint(sourceRect.rect.center);
+                    Vector3 localInFog = _containerRectTransform.InverseTransformPoint(worldCenter);
+                    float normX = (localInFog.x - fogRect.xMin) / w;
+                    float normY = (localInFog.y - fogRect.yMin) / h;
+                    _hexCenterTexture.SetPixel(col, row, new Color(normX, normY, 0f, 1f));
+                    validCellCount++;
+                }
+                else
+                {
+                    _hexCenterTexture.SetPixel(col, row, new Color(0f, 0f, 0f, 0f));
+                }
+            }
+        }
+        _hexCenterTexture.Apply(false);
+        
+        _fogMaterial.SetFloat("_UseHexLayout", 1f);
+        _fogMaterial.SetTexture("_HexCenterTex", _hexCenterTexture);
+        _fogMaterial.SetVector("_FogRectMin", new Vector2(fogRect.xMin, fogRect.yMin));
+        _fogMaterial.SetVector("_FogRectSize", new Vector2(fogRect.width, fogRect.height));
     }
     
     /// <summary>
@@ -341,13 +482,16 @@ public class FogMaskView : MonoBehaviour
             return new HashSet<Vector2Int>();
         }
         
-        // 使用造型系统获取攻击范围
+        // 使用造型系统获取攻击范围（含当前回合旋转挖掘相位）
         if (drill.UsesShapeSystem())
         {
             DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
             if (calculator != null)
             {
-                return calculator.GetAttackRange();
+                int currentTurn = TurnManager.Instance != null ? TurnManager.Instance.GetCurrentTurn() : 1;
+                int miningRotationDegrees = DrillAttackCalculator.GetMiningRotationDegreesFromTurn(currentTurn);
+                int? miningRotation = miningRotationDegrees != 0 ? (int?)miningRotationDegrees : null;
+                return calculator.GetAttackRange(miningRotation);
             }
         }
         
