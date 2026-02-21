@@ -41,7 +41,16 @@
                 }
             ],
             "traits": [],
-            "slots": [],
+            "slots": [
+                {
+                    "position": {
+                        "x": 0,
+                        "y": 0
+                    },
+                    "slotType": "Single",
+                    "slotId": ""
+                }
+            ],
             "description": "十字形5格钻头，覆盖上下左右四个方向"
         },
         {

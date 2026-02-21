@@ -1057,6 +1057,8 @@ public class MiningMapView : MonoBehaviour
             case MineralType.Diamond: return "diamond";
             case MineralType.Crystal: return "crystal";
             case MineralType.EnergyCore: return "energy_core";
+            case MineralType.Granite: return "granite";
+            case MineralType.Soil: return "soil";
             default: return null;
         }
     }
@@ -1419,6 +1421,40 @@ public class MiningMapView : MonoBehaviour
     }
 
     /// <summary>
+    /// 振动结束后将本批中已判定为被挖除的格子显示刷新为 Lattice_null（已挖空状态）。
+    /// </summary>
+    /// <param name="attackedTiles">本批参与振动的格子信息（仅处理 isFullyMined 的项）</param>
+    private void RefreshTilesToMinedVisual(IEnumerable<AttackedTileInfo> attackedTiles)
+    {
+        if (attackedTiles == null || _miningManager == null)
+            return;
+
+        MiningTileData[,] grid = _miningManager.GetLayerTileGrid(_currentLayerDepth);
+        if (grid == null)
+            return;
+
+        int width = grid.GetLength(0);
+        int height = grid.GetLength(1);
+
+        foreach (var tile in attackedTiles)
+        {
+            if (!tile.isFullyMined)
+                continue;
+
+            Vector2Int pos = tile.position;
+            if (pos.x < 0 || pos.x >= width || pos.y < 0 || pos.y >= height)
+                continue;
+
+            if (!_tileMap.TryGetValue(pos, out GameObject tileObj) || tileObj == null)
+                continue;
+
+            MiningTileData tileData = grid[pos.x, pos.y];
+            UpdateTileVisual(tileObj, tileData);
+            _tileOreIds.Remove(pos);
+        }
+    }
+
+    /// <summary>
     /// 播放晃动动画
     /// </summary>
     /// <param name="attackedTiles">被攻击的格子信息列表</param>
@@ -1479,6 +1515,9 @@ public class MiningMapView : MonoBehaviour
         {
             yield return coroutine;
         }
+
+        // 振动结束后，将本批中被挖除的格子显示刷新为 Lattice_null
+        RefreshTilesToMinedVisual(attackedTiles);
         
         // 晃动结束，清除红色高亮记录
         _damagedButNotMinedTiles.Clear();

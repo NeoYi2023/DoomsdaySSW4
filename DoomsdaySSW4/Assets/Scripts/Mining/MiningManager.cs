@@ -1139,6 +1139,8 @@ public class MiningManager : MonoBehaviour
             case "diamond": return MineralType.Diamond;
             case "crystal": return MineralType.Crystal;
             case "energy_core": return MineralType.EnergyCore;
+            case "granite": return MineralType.Granite;
+            case "soil": return MineralType.Soil;
             default: return MineralType.None;
         }
     }
@@ -1152,6 +1154,8 @@ public class MiningManager : MonoBehaviour
             case MineralType.Diamond: return "diamond";
             case MineralType.Crystal: return "crystal";
             case MineralType.EnergyCore: return "energy_core";
+            case MineralType.Granite: return "granite";
+            case MineralType.Soil: return "soil";
             default: return "";
         }
     }

@@ -66,20 +66,18 @@ Excel文件必须使用以下命名格式：
 
 ### 3. OreSpawnConfigs_矿石生成规则配置表.xlsx
 
-| layerDepth | oreId | weight | maxCount | spawnProbability |
-|------------|-------|--------|----------|-------------------|
-| 1 | iron | 75 | 35 | 0.0 |
-| 1 | energy_core | 25 | 8 | 0.0 |
-| 2 | iron | 55 | 30 | 0.0 |
+| layerDepthMin | layerDepthMax | defaultOre | nonDefaultOres |
+|---------------|---------------|------------|----------------|
+| 1 | 1 | energy_core_75_100_20 | iron_25_30_10 |
+| 2 | 10 | energy_core_5_100_20 | iron_30_20_10\|gold_35_20_10\|crystal_20_12_10 |
 
 **字段说明：**
-- `layerDepth`: 层数（整数）
-- `oreId`: 矿石ID（字符串）
-- `weight`: 权重（整数）
-- `maxCount`: 最大数量（整数）
-- `spawnProbability`: 生成概率（浮点数）
+- `layerDepthMin`: 层数区间下限（整数，含）
+- `layerDepthMax`: 层数区间上限（整数，含）
+- `defaultOre`: 默认矿石（兜底），格式为 `矿石ID_出现权重_最大数量_生成概率`（下划线分隔）
+- `nonDefaultOres`: 非默认矿石列表，多段用 `|` 分隔，每段格式同上
 
-**注意：** 同一`layerDepth`的多行会被合并为一个配置对象。
+**注意：** 一行配置适用于该层区间内每一层。若多行区间都包含同一层，以 CSV 中**先出现**的那一行为准。转换后仍生成每层一个配置对象（与旧版「同一 layerDepth 多行合并」等价）。
 
 ### 4. DrillShapeConfigs_钻头造型配置表.xlsx
 

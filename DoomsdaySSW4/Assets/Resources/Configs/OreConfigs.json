@@ -11,7 +11,7 @@
             "isEnergyOre": false,
             "energyValue": 0,
             "minDepth": 1,
-            "maxDepth": 5,
+            "maxDepth": 99999,
             "spawnProbability": 0.0,
             "spritePath": "UI/Ores/ore_iron",
             "latticeSpritePath": "UI/Lattice/Lattice_iron"
@@ -27,7 +27,7 @@
             "isEnergyOre": false,
             "energyValue": 0,
             "minDepth": 2,
-            "maxDepth": 10,
+            "maxDepth": 99999,
             "spawnProbability": 0.0,
             "spritePath": "UI/Ores/ore_gold",
             "latticeSpritePath": "UI/Lattice/Lattice_gold"
@@ -42,8 +42,8 @@
             "value": 500,
             "isEnergyOre": false,
             "energyValue": 0,
-            "minDepth": 4,
-            "maxDepth": 10,
+            "minDepth": 15,
+            "maxDepth": 99999,
             "spawnProbability": 0.0,
             "spritePath": "UI/Ores/ore_diamond",
             "latticeSpritePath": "UI/Lattice/Lattice_diamond"
@@ -59,7 +59,7 @@
             "isEnergyOre": false,
             "energyValue": 0,
             "minDepth": 3,
-            "maxDepth": 9,
+            "maxDepth": 99999,
             "spawnProbability": 0.0,
             "spritePath": "UI/Ores/ore_crystal",
             "latticeSpritePath": "UI/Lattice/Lattice_crystal"
@@ -75,7 +75,7 @@
             "isEnergyOre": true,
             "energyValue": 10,
             "minDepth": 1,
-            "maxDepth": 10,
+            "maxDepth": 99999,
             "spawnProbability": 0.0,
             "spritePath": "UI/Ores/ore_energy_core",
             "latticeSpritePath": "UI/Lattice/Lattice_energy_core"
@@ -91,10 +91,26 @@
             "isEnergyOre": false,
             "energyValue": 0,
             "minDepth": 1,
-            "maxDepth": 5,
+            "maxDepth": 99999,
             "spawnProbability": 0.0,
             "spritePath": "UI/Ores/ore_granite",
             "latticeSpritePath": "UI/Lattice/Lattice_granite"
+        },
+        {
+            "oreId": "soil",
+            "oreName": "土",
+            "oreType": 0,
+            "hardness": 5,
+            "requiredAttributeKey": "",
+            "requiredAttributeValue": 0,
+            "value": 0,
+            "isEnergyOre": false,
+            "energyValue": 0,
+            "minDepth": 0,
+            "maxDepth": 99999,
+            "spawnProbability": 50.0,
+            "spritePath": "UI/Ores/ore_soil",
+            "latticeSpritePath": "UI/Lattice/Lattice_soil"
         }
     ]
 }

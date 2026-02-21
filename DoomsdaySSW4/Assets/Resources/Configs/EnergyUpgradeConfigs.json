@@ -1,4 +1,4 @@
-{
+﻿{
     "upgrades": [
         {
             "upgradeId": "drill_strength_1",
@@ -160,15 +160,6 @@
             "description": "解锁能源提取专用钻头造型，可在钻机平台中放置",
             "value": 0,
             "weight": 12,
-            "iconPath": ""
-        },
-        {
-            "upgradeId": "slot_add_1",
-            "type": "DrillSlotAdd",
-            "name": "增加插槽",
-            "description": "可在钻头造型上增加一个插槽，用于后续安装钻头增强装置",
-            "value": 1,
-            "weight": 18,
             "iconPath": ""
         }
     ]

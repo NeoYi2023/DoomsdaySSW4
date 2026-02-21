@@ -3,29 +3,8 @@
         {
             "shipId": "default_ship",
             "shapeId": "shape_line_4",
-            "positionX": 4,
+            "positionX": 3,
             "positionY": 5,
-            "rotation": 0
-        },
-        {
-            "shipId": "default_ship",
-            "shapeId": "shape_line_4",
-            "positionX": 4,
-            "positionY": 4,
-            "rotation": 0
-        },
-        {
-            "shipId": "default_ship",
-            "shapeId": "shape_line_4",
-            "positionX": 4,
-            "positionY": 3,
-            "rotation": 0
-        },
-        {
-            "shipId": "default_ship",
-            "shapeId": "shape_line_4",
-            "positionX": 4,
-            "positionY": 2,
             "rotation": 0
         }
     ]

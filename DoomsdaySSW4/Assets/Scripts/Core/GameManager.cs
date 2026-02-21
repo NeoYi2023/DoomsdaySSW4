@@ -107,9 +107,10 @@ public class GameManager : MonoBehaviour
         // 3. 初始化钻头
         _drillManager.InitializeDefaultDrill();
 
-        // 4. 生成挖矿地图（5层，使用随机种子）
+        // 4. 生成挖矿地图（默认50层，可继续向下挖过14层；使用随机种子）
         int seed = Random.Range(0, int.MaxValue);
-        _miningManager.InitializeMiningMap(5, seed);
+        const int defaultMaxMiningDepth = 50;
+        _miningManager.InitializeMiningMap(defaultMaxMiningDepth, seed);
 
         // 5. 加载任务配置并开始第一个任务
         _taskManager.LoadTaskConfigs();

@@ -32,6 +32,7 @@ public class GameScreen : MonoBehaviour
     
     [Header("状态显示")]
     [SerializeField] private TextMeshProUGUI miningStatusText; // 挖矿状态文字
+    [SerializeField] private TextMeshProUGUI stratumText;       // 当前层数显示（Stratum）
     
     [Header("能源进度条")]
     [SerializeField] private EnergyProgressBar energyProgressBar; // 能源升级进度条
@@ -440,11 +441,11 @@ public class GameScreen : MonoBehaviour
         if (_miningMapView != null && state.miningData != null)
         {
             int currentLayer = state.miningData.currentDepth > 0 ? state.miningData.currentDepth : 1;
-            
-            
             _miningMapView.UpdateMap(currentLayer);
             // 刷新高亮状态（确保钻头范围变化时高亮也会更新）
             _miningMapView.RefreshHighlight();
+            if (stratumText != null)
+                stratumText.text = currentLayer.ToString();
         }
         
         // 更新能源进度条
@@ -624,6 +625,16 @@ public class GameScreen : MonoBehaviour
     {
         // 切换到新层时更新挖矿状态文字
         UpdateMiningStatusText();
+        // 同步当前层数到 Stratum 显示
+        if (_gameManager != null && stratumText != null)
+        {
+            GameStateInfo state = _gameManager.GetGameStateInfo();
+            if (state?.miningData != null)
+            {
+                int depth = state.miningData.currentDepth > 0 ? state.miningData.currentDepth : 1;
+                stratumText.text = depth.ToString();
+            }
+        }
     }
     
     /// <summary>

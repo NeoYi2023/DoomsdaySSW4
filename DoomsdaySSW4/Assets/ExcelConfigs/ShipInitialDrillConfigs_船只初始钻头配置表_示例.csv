@@ -1,5 +1,2 @@
 shipId,shapeId,positionX,positionY,rotation
-default_ship,shape_line_4,4,5,0
-default_ship,shape_line_4,4,4,0
-default_ship,shape_line_4,4,3,0
-default_ship,shape_line_4,4,2,0
+default_ship,shape_line_4,3,5,0

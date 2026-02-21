@@ -603,11 +603,26 @@ public class OreSpawnRule
 }
 ```
 
+#### 配置表格式（OreSpawnConfigs）
+
+配置表采用层数区间 + 单行多列形式，表头为四列：
+
+| 列 | 字段名 | 含义 | 格式示例 |
+|----|--------|------|----------|
+| 1 | layerDepthMin | 层数区间下限（含） | 1 |
+| 2 | layerDepthMax | 层数区间上限（含） | 10 |
+| 3 | defaultOre | 默认矿石（兜底） | `energy_core_75_100_20` |
+| 4 | nonDefaultOres | 非默认矿石列表 | `iron_25_30_10\|gold_15_8_10` |
+
+- **层区间**：闭区间 `[layerDepthMin, layerDepthMax]`，该行配置适用于该区间内每一层。若多行区间都包含同一层，取 **CSV 中先出现** 的那一行。
+- **defaultOre**：单个字符串，格式为 `矿石ID_出现权重_最大数量_生成概率`（下划线分隔，共 4 段）。
+- **nonDefaultOres**：多段用 `|` 分隔，每段格式同上。
+
+转换后仍生成与运行时一致的 `OreSpawnConfig` / `OreSpawnRule` 结构（每层一个配置、spawnRules 中含 default=1 的一条为默认矿石）。
+
 #### 3.10.2 矿石生成规则中的默认矿石逻辑（default）
 
-- 在 `OreSpawnConfigs` 配置表中为每条规则增加一列 `default`（整型，0/1）：
-  - `default = 1` 表示该矿石为该层的**默认矿石类型**
-  - `default = 0` 表示普通矿石规则
+- 在配置表中：**第三列 defaultOre** 表示该层区间的默认矿石（兜底类型）；第四列 nonDefaultOres 为普通矿石规则。转换后对应 `OreSpawnRule.@default = 1`（默认）与 `0`（非默认）。
 - 生成流程：
   1. 正常按权重随机选出 `selectedRule`
   2. 如果 `selectedRule` 的 `maxCount` 已经达到上限，则不再使用该规则生成矿石

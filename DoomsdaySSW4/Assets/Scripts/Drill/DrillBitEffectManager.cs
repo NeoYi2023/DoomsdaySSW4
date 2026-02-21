@@ -295,6 +295,8 @@ public class DrillBitEffectManager : MonoBehaviour
             case MineralType.Diamond: return "diamond";
             case MineralType.Crystal: return "crystal";
             case MineralType.EnergyCore: return "energy_core";
+            case MineralType.Granite: return "granite";
+            case MineralType.Soil: return "soil";
             default: return "";
         }
     }

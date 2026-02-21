@@ -453,7 +453,40 @@ public class ExcelToJsonConverter : EditorWindow
     }
 
     /// <summary>
-    /// 转换OreSpawnConfigs（需要按layerDepth分组）
+    /// 解析单条矿石规则字符串 "oreId_出现权重_最大数量_生成概率" 为 OreSpawnRule。oreId 可含下划线。
+    /// </summary>
+    /// <param name="segment">格式：矿石ID_权重_最大数量_生成概率</param>
+    /// <param name="isDefault">1=默认矿石，0=非默认</param>
+    /// <returns>解析成功返回规则，否则返回 null</returns>
+    private OreSpawnRule ParseOreSpawnRuleSegment(string segment, int isDefault)
+    {
+        if (string.IsNullOrWhiteSpace(segment)) return null;
+        string[] parts = segment.Trim().Split('_');
+        if (parts.Length < 4)
+        {
+            AddLog($"  警告：OreSpawn 规则段格式不足4段，已跳过: {segment}");
+            return null;
+        }
+        string oreId = string.Join("_", parts.Take(parts.Length - 3));
+        if (!int.TryParse(parts[parts.Length - 3], out int weight) ||
+            !int.TryParse(parts[parts.Length - 2], out int maxCount) ||
+            !float.TryParse(parts[parts.Length - 1], out float spawnProbability))
+        {
+            AddLog($"  警告：OreSpawn 规则段数值解析失败，已跳过: {segment}");
+            return null;
+        }
+        return new OreSpawnRule
+        {
+            oreId = oreId,
+            weight = weight,
+            maxCount = maxCount,
+            spawnProbability = spawnProbability,
+            @default = isDefault
+        };
+    }
+
+    /// <summary>
+    /// 转换OreSpawnConfigs（层数区间 + defaultOre + nonDefaultOres，按层展开）
     /// </summary>
     private bool ConvertOreSpawnConfigs(List<Dictionary<string, string>> data, string outputPath)
     {
@@ -463,26 +496,48 @@ public class ExcelToJsonConverter : EditorWindow
         {
             try
             {
-                int layerDepth = GetInt(row, "layerDepth");
-                if (!layerDict.ContainsKey(layerDepth))
+                int layerDepthMin = GetInt(row, "layerDepthMin");
+                int layerDepthMax = GetInt(row, "layerDepthMax");
+                if (layerDepthMin > layerDepthMax)
                 {
+                    AddLog($"  警告：跳过无效行 layerDepthMin({layerDepthMin}) > layerDepthMax({layerDepthMax})");
+                    continue;
+                }
+
+                string defaultOreStr = GetString(row, "defaultOre");
+                string nonDefaultOresStr = GetString(row, "nonDefaultOres");
+
+                OreSpawnRule defaultRule = ParseOreSpawnRuleSegment(defaultOreStr, 1);
+                if (defaultRule == null)
+                {
+                    AddLog($"  警告：跳过无效行，defaultOre 解析失败: {defaultOreStr}");
+                    continue;
+                }
+
+                List<OreSpawnRule> nonDefaultRules = new List<OreSpawnRule>();
+                if (!string.IsNullOrWhiteSpace(nonDefaultOresStr))
+                {
+                    foreach (string segment in nonDefaultOresStr.Split('|'))
+                    {
+                        OreSpawnRule r = ParseOreSpawnRuleSegment(segment, 0);
+                        if (r != null) nonDefaultRules.Add(r);
+                    }
+                }
+
+                List<OreSpawnRule> allRules = new List<OreSpawnRule>();
+                allRules.AddRange(nonDefaultRules);
+                allRules.Add(defaultRule);
+
+                for (int layerDepth = layerDepthMin; layerDepth <= layerDepthMax; layerDepth++)
+                {
+                    if (layerDict.ContainsKey(layerDepth))
+                        continue;
                     layerDict[layerDepth] = new OreSpawnConfig
                     {
                         layerDepth = layerDepth,
-                        spawnRules = new List<OreSpawnRule>()
+                        spawnRules = new List<OreSpawnRule>(allRules)
                     };
                 }
-
-                OreSpawnRule rule = new OreSpawnRule
-                {
-                    oreId = GetString(row, "oreId"),
-                    weight = GetInt(row, "weight"),
-                    maxCount = GetInt(row, "maxCount"),
-                    spawnProbability = GetFloat(row, "spawnProbability"),
-                    @default = GetInt(row, "default")
-                };
-
-                layerDict[layerDepth].spawnRules.Add(rule);
             }
             catch (Exception e)
             {

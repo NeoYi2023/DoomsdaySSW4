@@ -80,6 +80,8 @@ public enum MineralType
     Gold,           // 金
     Diamond,        // 钻石
     Crystal,        // 水晶
-    EnergyCore      // 能量核心
+    EnergyCore,     // 能量核心
+    Granite,        // 花岗岩
+    Soil            // 土
 }
 
