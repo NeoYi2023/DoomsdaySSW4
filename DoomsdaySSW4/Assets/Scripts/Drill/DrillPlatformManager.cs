@@ -86,6 +86,12 @@ public class DrillPlatformManager : MonoBehaviour
                 PlaceInitialShape(drillConfig);
             }
             Debug.Log($"已根据配置放置 {initialDrills.Count} 个初始钻头");
+            // 从第一条配置读取旋转中心（若有效则设定）
+            ShipInitialDrillConfig firstConfig = initialDrills[0];
+            if (firstConfig.HasValidRotationCenter())
+            {
+                SetRotationCenter(new Vector2Int(firstConfig.rotationCenterX, firstConfig.rotationCenterY));
+            }
         }
         else if (_platformData.availableShapeIds.Count > 0)
         {

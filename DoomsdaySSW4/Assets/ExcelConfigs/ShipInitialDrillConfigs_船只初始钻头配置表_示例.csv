@@ -1,2 +1,2 @@
-shipId,shapeId,positionX,positionY,rotation
-default_ship,shape_line_4,3,5,0
+﻿shipId,shapeId,positionX,positionY,rotation,rotationCenterX,rotationCenterY
+default_ship,shape_line_3,3,5,0,4,5

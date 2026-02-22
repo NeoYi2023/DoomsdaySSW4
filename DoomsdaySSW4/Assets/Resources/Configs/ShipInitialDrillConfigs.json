@@ -2,10 +2,12 @@
     "configs": [
         {
             "shipId": "default_ship",
-            "shapeId": "shape_line_4",
+            "shapeId": "shape_line_3",
             "positionX": 3,
             "positionY": 5,
-            "rotation": 0
+            "rotation": 0,
+            "rotationCenterX": 4,
+            "rotationCenterY": 5
         }
     ]
 }

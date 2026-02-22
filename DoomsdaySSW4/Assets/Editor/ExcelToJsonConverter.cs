@@ -602,7 +602,9 @@ public class ExcelToJsonConverter : EditorWindow
                     shapeId = GetString(row, "shapeId"),
                     positionX = GetInt(row, "positionX"),
                     positionY = GetInt(row, "positionY"),
-                    rotation = GetInt(row, "rotation")
+                    rotation = GetInt(row, "rotation"),
+                    rotationCenterX = GetIntWithDefault(row, "rotationCenterX", -1),
+                    rotationCenterY = GetIntWithDefault(row, "rotationCenterY", -1)
                 };
                 configs.Add(config);
             }
@@ -896,6 +898,14 @@ public class ExcelToJsonConverter : EditorWindow
         if (int.TryParse(value, out int result))
             return result;
         return 0;
+    }
+
+    private int GetIntWithDefault(Dictionary<string, string> row, string key, int defaultValue)
+    {
+        string value = GetString(row, key);
+        if (string.IsNullOrWhiteSpace(value)) return defaultValue;
+        if (int.TryParse(value, out int result)) return result;
+        return defaultValue;
     }
 
     private float GetFloat(Dictionary<string, string> row, string key)

@@ -3497,11 +3497,17 @@ UI系统
    - 列：船只ID、船只名称、初始债务、描述
    - 用途：定义可租借的船只及其初始债务
 
-6. **能源阈值配置表（EnergyThresholdConfig.xlsx）**
+6. **船只初始钻头配置表（ShipInitialDrillConfigs_船只初始钻头配置表_示例.csv）**
+   - 列：`shipId`、`shapeId`、`positionX`、`positionY`、`rotation`、`rotationCenterX`、`rotationCenterY`
+   - 用途：定义每艘船初始时平台上已放置的钻头造型及该船的默认旋转中心（钻心）
+   - `rotationCenterX`、`rotationCenterY`：平台旋转中心坐标，与平台格子坐标系一致，取值范围 0～PLATFORM_SIZE-1；列不存在或为空时视为未配置（运行时以 -1 表示）
+   - 读表规则：按 `shipId` 取**第一条**有效配置行的 `rotationCenterX`、`rotationCenterY` 设定 `DrillPlatformData.rotationCenter`；若未配置或不在边界内则使用默认中心（平台几何中心）
+
+7. **能源阈值配置表（EnergyThresholdConfig.xlsx）**
    - 列：阈值索引、能源值、描述
    - 用途：定义触发三选一升级的能源阈值序列
 
-7. **钻头造型配置表示例（DrillShapeConfigs_钻头造型配置表_示例.csv）**
+8. **钻头造型配置表示例（DrillShapeConfigs_钻头造型配置表_示例.csv）**
    - 列：`shapeId`、`shapeName`、`baseAttackStrength`、`cells`、`traits`、`slots`、`description`
    - 用途：以 CSV 示例形式给出若干典型钻头造型（十字形、直线、L 形、T 形、方块形、Z/S 形、能源提取专用等），并作为能源升级系统中 `DrillShapeUnlock` 选项的来源表：
      - 对于每一条 `shapeId`，可以在 `EnergyUpgradeConfigs` 中增加一条对应的“解锁钻头造型”升级配置行（`type = DrillShapeUnlock`，`upgradeId` 与 `shapeId` 对应），用于在三选一中解锁该造型。
