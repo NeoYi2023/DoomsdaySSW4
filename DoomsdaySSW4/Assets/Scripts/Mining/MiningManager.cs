@@ -410,22 +410,32 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 使用圆环扫掠系统获取攻击格子列表
+    /// 使用每 60° 扫掠系统获取攻击格子列表（6 角度并集，同格攻击力累加）
     /// </summary>
     private List<AttackedTileInfo> GetTilesToAttackWithShapeSystem(DrillData drill, MiningLayerData layer)
     {
         List<AttackedTileInfo> tilesToAttack = new List<AttackedTileInfo>();
 
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        CircularSweepResult sweepResult = calculator.CalculateCircularSweepAttackMap(drill, LAYER_WIDTH, LAYER_HEIGHT);
+        CircularSweepResultPer60 sweepResult = calculator.CalculateCircularSweepAttackMapPer60(drill, LAYER_WIDTH, LAYER_HEIGHT);
 
-        foreach (var kvp in sweepResult.attackMap)
+        Dictionary<Vector2Int, int> mergedStrength = new Dictionary<Vector2Int, int>();
+        foreach (var kvp in sweepResult.attackMapsByAngle)
+        {
+            foreach (var cell in kvp.Value)
+            {
+                Vector2Int pos = cell.Key;
+                if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
+                    continue;
+                if (!mergedStrength.TryGetValue(pos, out int sum))
+                    sum = 0;
+                mergedStrength[pos] = sum + cell.Value.attackStrength;
+            }
+        }
+
+        foreach (var kvp in mergedStrength)
         {
             Vector2Int pos = kvp.Key;
-            
-            if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
-                continue;
-
             MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
             if (tile == null || tile.tileType != TileType.Ore || tile.isMined)
                 continue;
@@ -433,7 +443,7 @@ public class MiningManager : MonoBehaviour
             tilesToAttack.Add(new AttackedTileInfo
             {
                 position = pos,
-                attackStrength = kvp.Value.attackStrength
+                attackStrength = kvp.Value
             });
         }
 
@@ -512,8 +522,7 @@ public class MiningManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 使用圆环扫掠系统攻击矿石。每个钻头格以其到中心的距离为半径，
-    /// 旋转一周覆盖同半径圆环上的所有矿石格。
+    /// 使用每 60° 扫掠系统攻击矿石。以平台相对旋转中心为起点，在 0°/60°/120°/180°/240°/300° 各计算一次并顺序施加伤害。
     /// </summary>
     private MiningResult AttackOresWithCircularSweep(DrillData drill, MiningLayerData layer, int layerDepth)
     {
@@ -527,86 +536,108 @@ public class MiningManager : MonoBehaviour
         };
 
         DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-        CircularSweepResult sweepResult = calculator.CalculateCircularSweepAttackMap(drill, LAYER_WIDTH, LAYER_HEIGHT);
+        CircularSweepResultPer60 sweepResult = calculator.CalculateCircularSweepAttackMapPer60(drill, LAYER_WIDTH, LAYER_HEIGHT);
 
-        foreach (var kvp in sweepResult.attackMap)
+        // 同一格在多角度被命中时合并为一条，记录总伤害与最终是否挖空
+        Dictionary<Vector2Int, AttackedTileInfo> attackedByPos = new Dictionary<Vector2Int, AttackedTileInfo>();
+
+        int[] angles = { 0, 60, 120, 180, 240, 300 };
+        foreach (int angle in angles)
         {
-            Vector2Int pos = kvp.Key;
-            int attackValue = kvp.Value.attackStrength;
-
-            if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
+            if (!sweepResult.attackMapsByAngle.TryGetValue(angle, out var attackMapAtAngle))
                 continue;
 
-            MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
-            if (tile == null || tile.tileType != TileType.Ore || tile.isMined)
-                continue;
-
-            string oreType = GetOreTypeString(tile.mineralType);
-            int finalAttackValue = calculator.CalculateCircularSweepStrengthForOre(pos, oreType, drill, LAYER_WIDTH, LAYER_HEIGHT);
-            if (finalAttackValue == 0)
+            foreach (var kvp in attackMapAtAngle)
             {
-                finalAttackValue = attackValue;
-            }
+                Vector2Int pos = kvp.Key;
+                int attackValue = kvp.Value.attackStrength;
 
-            tile.hardness -= finalAttackValue;
+                if (pos.x < 0 || pos.x >= LAYER_WIDTH || pos.y < 0 || pos.y >= LAYER_HEIGHT)
+                    continue;
 
-            OreConfig oreConfig = _configManager.GetOreConfig(GetOreIdFromMineralType(tile.mineralType));
-            string currentOreId = oreConfig?.oreId ?? "";
-            int oreValue = oreConfig?.value ?? 0;
-            bool isFullyMined = tile.hardness <= 0;
+                MiningTileData tile = layer.tiles.FirstOrDefault(t => t.x == pos.x && t.y == pos.y);
+                if (tile == null || tile.tileType != TileType.Ore || tile.isMined)
+                    continue;
 
-            result.attackedTiles.Add(new AttackedTileInfo
-            {
-                position = pos,
-                attackStrength = finalAttackValue,
-                isFullyMined = isFullyMined,
-                remainingHardness = Mathf.Max(0, tile.hardness),
-                oreId = currentOreId,
-                moneyValue = isFullyMined ? oreValue : 0
-            });
+                string oreType = GetOreTypeString(tile.mineralType);
+                int finalAttackValue = calculator.CalculateAttackStrengthForOre(pos, oreType, drill, angle);
+                if (finalAttackValue == 0)
+                    finalAttackValue = attackValue;
 
-            if (isFullyMined)
-            {
-                OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
-                if (ore != null)
+                tile.hardness -= finalAttackValue;
+
+                OreConfig oreConfig = _configManager.GetOreConfig(GetOreIdFromMineralType(tile.mineralType));
+                string currentOreId = oreConfig?.oreId ?? "";
+                int oreValue = oreConfig?.value ?? 0;
+                bool isFullyMined = tile.hardness <= 0;
+
+                if (attackedByPos.TryGetValue(pos, out AttackedTileInfo existing))
                 {
-                    tile.isMined = true;
-                    ore.isMined = true;
-                    result.minedOres.Add(ore);
-
-                    if (!_miningData.minerals.ContainsKey(ore.mineralType))
-                        _miningData.minerals[ore.mineralType] = 0;
-                    _miningData.minerals[ore.mineralType]++;
-
-                    if (ore.isEnergyOre)
+                    existing.attackStrength += finalAttackValue;
+                    existing.isFullyMined = isFullyMined;
+                    existing.remainingHardness = Mathf.Max(0, tile.hardness);
+                    existing.moneyValue = isFullyMined ? oreValue : 0;
+                }
+                else
+                {
+                    attackedByPos[pos] = new AttackedTileInfo
                     {
-                        result.energyGained += ore.energyValue;
-                    }
-                    else
-                    {
-                        result.moneyGained += ore.value;
-                    }
+                        position = pos,
+                        attackStrength = finalAttackValue,
+                        isFullyMined = isFullyMined,
+                        remainingHardness = Mathf.Max(0, tile.hardness),
+                        oreId = currentOreId,
+                        moneyValue = isFullyMined ? oreValue : 0
+                    };
+                }
 
-                    DrillBitEffectManager effectManager = DrillBitEffectManager.Instance;
-                    if (effectManager != null)
+                if (isFullyMined)
+                {
+                    OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
+                    if (ore != null)
                     {
-                        List<BitEffectDamage> effectDamages = effectManager.ProcessBitEffects(
-                            pos, layerDepth, currentOreId);
-                        foreach (var effectDamage in effectDamages)
+                        tile.isMined = true;
+                        ore.isMined = true;
+                        result.minedOres.Add(ore);
+
+                        if (!_miningData.minerals.ContainsKey(ore.mineralType))
+                            _miningData.minerals[ore.mineralType] = 0;
+                        _miningData.minerals[ore.mineralType]++;
+
+                        if (ore.isEnergyOre)
+                            result.energyGained += ore.energyValue;
+                        else
+                            result.moneyGained += ore.value;
+
+                        DrillBitEffectManager effectManager = DrillBitEffectManager.Instance;
+                        if (effectManager != null)
                         {
-                            ApplyBitEffectDamage(effectDamage, layer, layerDepth, result);
+                            List<BitEffectDamage> effectDamages = effectManager.ProcessBitEffects(
+                                pos, layerDepth, currentOreId);
+                            foreach (var effectDamage in effectDamages)
+                            {
+                                ApplyBitEffectDamage(effectDamage, layer, layerDepth, result);
+                            }
                         }
                     }
                 }
-            }
-            else
-            {
-                OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
-                if (ore != null)
+                else
                 {
-                    ore.currentHardness = tile.hardness;
-                    result.partiallyDamagedOres.Add(ore);
+                    OreData ore = GetOreAtPosition(layerDepth, pos.x, pos.y);
+                    if (ore != null)
+                        ore.currentHardness = tile.hardness;
                 }
+            }
+        }
+
+        result.attackedTiles.AddRange(attackedByPos.Values);
+        foreach (var info in attackedByPos.Values)
+        {
+            if (!info.isFullyMined)
+            {
+                OreData ore = GetOreAtPosition(layerDepth, info.position.x, info.position.y);
+                if (ore != null)
+                    result.partiallyDamagedOres.Add(ore);
             }
         }
 

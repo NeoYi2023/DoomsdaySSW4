@@ -4,20 +4,6 @@
             "layerDepth": 1,
             "spawnRules": [
                 {
-                    "oreId": "iron",
-                    "weight": 25,
-                    "maxCount": 30,
-                    "spawnProbability": 10.0,
-                    "default": 0
-                },
-                {
-                    "oreId": "energy_core",
-                    "weight": 10,
-                    "maxCount": 6,
-                    "spawnProbability": 100.0,
-                    "default": 0
-                },
-                {
                     "oreId": "soil",
                     "weight": 75,
                     "maxCount": 100,
@@ -29,20 +15,6 @@
         {
             "layerDepth": 2,
             "spawnRules": [
-                {
-                    "oreId": "iron",
-                    "weight": 25,
-                    "maxCount": 30,
-                    "spawnProbability": 10.0,
-                    "default": 0
-                },
-                {
-                    "oreId": "energy_core",
-                    "weight": 10,
-                    "maxCount": 6,
-                    "spawnProbability": 100.0,
-                    "default": 0
-                },
                 {
                     "oreId": "soil",
                     "weight": 75,
@@ -56,20 +28,6 @@
             "layerDepth": 3,
             "spawnRules": [
                 {
-                    "oreId": "iron",
-                    "weight": 25,
-                    "maxCount": 30,
-                    "spawnProbability": 10.0,
-                    "default": 0
-                },
-                {
-                    "oreId": "energy_core",
-                    "weight": 10,
-                    "maxCount": 6,
-                    "spawnProbability": 100.0,
-                    "default": 0
-                },
-                {
                     "oreId": "soil",
                     "weight": 75,
                     "maxCount": 100,
@@ -82,20 +40,6 @@
             "layerDepth": 4,
             "spawnRules": [
                 {
-                    "oreId": "iron",
-                    "weight": 25,
-                    "maxCount": 30,
-                    "spawnProbability": 10.0,
-                    "default": 0
-                },
-                {
-                    "oreId": "energy_core",
-                    "weight": 10,
-                    "maxCount": 6,
-                    "spawnProbability": 100.0,
-                    "default": 0
-                },
-                {
                     "oreId": "soil",
                     "weight": 75,
                     "maxCount": 100,
@@ -107,20 +51,6 @@
         {
             "layerDepth": 5,
             "spawnRules": [
-                {
-                    "oreId": "iron",
-                    "weight": 25,
-                    "maxCount": 30,
-                    "spawnProbability": 10.0,
-                    "default": 0
-                },
-                {
-                    "oreId": "energy_core",
-                    "weight": 10,
-                    "maxCount": 6,
-                    "spawnProbability": 100.0,
-                    "default": 0
-                },
                 {
                     "oreId": "soil",
                     "weight": 75,

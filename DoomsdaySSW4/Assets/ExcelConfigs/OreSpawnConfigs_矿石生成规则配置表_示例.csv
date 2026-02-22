@@ -1,5 +1,6 @@
 ﻿layerDepthMin,layerDepthMax,defaultOre,nonDefaultOres
-1,10,soil_75_100_20,iron_25_30_10|energy_core_10_6_100
+1,5,soil_75_100_20,
+6,10,soil_75_100_20,iron_25_30_10|energy_core_10_6_100
 11,20,soil_30_100_20,iron_55_30_10|gold_15_8_10|energy_core_10_6_100
 21,30,soil_10_100_20,iron_45_25_10|gold_30_18_10|crystal_15_10_10|energy_core_10_6_100
 31,40,soil_5_100_20,iron_30_20_10|gold_35_20_10|crystal_20_12_10|diamond_10_6_10|energy_core_10_6_100

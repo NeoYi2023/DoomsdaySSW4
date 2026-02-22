@@ -764,6 +764,16 @@ public enum UpgradeType
 - 旋转公式：90度顺时针旋转 `(x, y) -> (y, -x)`
 - 旋转后需重新检测碰撞和边界
 
+#### 3.11.6a 六边形旋转与扫掠
+
+扫掠/攻击计算采用**预计算查表**方式，避免 odd-r 奇偶行格子数不同时公式旋转错格。
+
+- **坐标约定**：平台与地图均使用 odd-r 平顶偏移坐标 `(col, row)`；轴向坐标 `(q, r)` 与偏移转换：`q = col - (row - (row&1))/2`, `r = row`；`col = q + (r - (r&1))/2`, `row = r`。与 `HexLayoutGroup`、`MiningManager.LAYER_WIDTH/LAYER_HEIGHT` 仅用于地图边界与布局，不参与表构建。
+- **查表类**：`HexRotationLookupTable`。按「旋转中心」`DrillPlatformData.rotationCenter` 与平台尺寸 `PLATFORM_SIZE` 构建并缓存。
+- **正向表**：平台格 `(col, row)` 绕中心顺时针旋转 0°/60°/120°/180°/240°/300° 后的坐标 `(col', row')`，由纯轴向旋转（60° 步长）生成后转回偏移，不做边界裁剪；调用方按地图边界过滤。
+- **逆向表**：由正向表推导，`(col', row')` + 角度 → 平台格 `(col, row)`；逆查无表项时回退 `DrillShapeRotator.RotateOffsetPointAroundCenter`。
+- **使用处**：`DrillAttackCalculator.BuildAttackMapAtAngle` 使用正向查表得到旋转后地图格；`CalculateAttackStrengthForOre` 使用逆向查表由地图格反查平台格。
+
 #### 3.11.7 放置规则
 
 - 每个格子只能被一个造型占用（不允许重叠）

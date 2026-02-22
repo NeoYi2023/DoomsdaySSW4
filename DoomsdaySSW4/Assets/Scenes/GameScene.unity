@@ -24814,7 +24814,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 969.1, y: -20}
+  m_AnchoredPosition: {x: 911, y: -49}
   m_SizeDelta: {x: 208, y: 23}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1240618757
@@ -24892,7 +24892,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 999
+  m_text: "\u8C03\u6574\u94BB\u5934\u65CB\u8F6C\u4E2D\u5FC3\u4F4D\u7F6E"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 0}
   m_sharedMaterial: {fileID: 0}

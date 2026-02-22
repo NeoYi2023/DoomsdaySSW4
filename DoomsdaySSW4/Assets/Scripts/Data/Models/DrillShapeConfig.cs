@@ -196,7 +196,7 @@ public static class DrillShapeRotator
     }
 
     /// <summary>
-    /// 绕指定中心点顺时针旋转单个点
+    /// 绕指定中心点顺时针旋转单个点（当前按轴向公式，适用于造型相对坐标 axial）
     /// </summary>
     /// <param name="point">待旋转的点</param>
     /// <param name="center">旋转中心</param>
@@ -207,6 +207,45 @@ public static class DrillShapeRotator
         int dy = point.y - center.y;
         Vector2Int rotated = RotatePoint(new Vector2Int(dx, dy), degrees);
         return new Vector2Int(center.x + rotated.x, center.y + rotated.y);
+    }
+
+    /// <summary>
+    /// odd-r 平顶六边形下 60° 顺时针的 6 个方向（轴向坐标），与 odd-r 偏移的 6 邻格一致。
+    /// 顺序：(-1,0), (0,1), (1,1), (1,0), (1,-1), (0,-1)；60° CW 为下一项，对应偏移增量 (-1,0),(0,1),(1,1),(1,0),(1,-1),(0,-1)。
+    /// </summary>
+    private static readonly int[] Offset60DirCol = { -1, 0, 1, 1, 1, 0 };
+    private static readonly int[] Offset60DirRow = { 0, 1, 1, 0, -1, -1 };
+
+    /// <summary>
+    /// 绕指定中心点顺时针旋转单个点（odd-r 偏移坐标，用于平台/地图格）。
+    /// 使用与钻头编辑一致的 6 方向 60° 顺序，保证 (-1,0) 旋转到 (0,1) 等与视觉一致。
+    /// </summary>
+    public static Vector2Int RotateOffsetPointAroundCenter(Vector2Int point, Vector2Int center, int degrees)
+    {
+        degrees = ((degrees % 360) + 360) % 360;
+        int dx = point.x - center.x;
+        int dy = point.y - center.y;
+        if (dx == 0 && dy == 0) return point;
+        int q = dx - (dy - (dy & 1)) / 2;
+        int r = dy;
+        int ring = (Math.Abs(q) + Math.Abs(r) + Math.Abs(q + r)) / 2;
+        if (ring == 0) return point;
+        int steps = degrees / 60;
+        int best = 0;
+        int bestDot = q * Offset60DirCol[0] + r * Offset60DirRow[0];
+        for (int i = 1; i < 6; i++)
+        {
+            int d = q * Offset60DirCol[i] + r * Offset60DirRow[i];
+            if (d > bestDot) { bestDot = d; best = i; }
+        }
+        int j = (best + steps) % 6;
+        int q2 = Offset60DirCol[j] * ring;
+        int r2 = Offset60DirRow[j] * ring;
+        // odd-r 轴向→偏移：col 依赖「结果行」center.y + r2 的奇偶性，不能只用 r2
+        int outRow = center.y + r2;
+        int col2 = q2 + (outRow - (outRow & 1)) / 2 - (center.y - (center.y & 1)) / 2;
+        int row2 = r2;
+        return new Vector2Int(center.x + col2, center.y + row2);
     }
 
     /// <summary>

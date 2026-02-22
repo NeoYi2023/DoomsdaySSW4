@@ -61,9 +61,47 @@ public class DrillAttackCalculator : MonoBehaviour
     }
 
     /// <summary>
-    /// 圆环扫掠匹配容差（sqrt(2)/2 ≈ 0.71，半个格子对角线长度）
+    /// 圆环扫掠匹配容差（已废弃：半径现按格子数/六边形圈数定义，参见 GetGridRingDistance）
     /// </summary>
+    [System.Obsolete("半径已改为格子数定义，不再使用欧氏容差")]
     public const float RADIUS_TOLERANCE = 0.71f;
+
+    /// <summary>
+    /// 计算格子相对中心的「圈数」（半径，单位：格子数）。与 PlacedDrillShape 的 odd-r 约定一致。
+    /// 0=中心格，1=第一圈 6 格，2=第二圈 12 格，以此类推。
+    /// </summary>
+    /// <param name="center">旋转中心 (col, row)</param>
+    /// <param name="cell">待判定格子 (col, row)</param>
+    /// <returns>六边形步数/圈数</returns>
+    public static int GetGridRingDistance(Vector2Int center, Vector2Int cell)
+    {
+        // odd-r: (x,y) = (col, row) → axial q = col - (row - (row & 1)) / 2, r = row
+        int q0 = center.x - (center.y - (center.y & 1)) / 2;
+        int r0 = center.y;
+        int q1 = cell.x - (cell.y - (cell.y & 1)) / 2;
+        int r1 = cell.y;
+        int dq = q1 - q0;
+        int dr = r1 - r0;
+        // 六边形轴向距离: (|dq| + |dr| + |dq+dr|) / 2
+        int dqpr = dq + dr;
+        return (Math.Abs(dq) + Math.Abs(dr) + Math.Abs(dqpr)) / 2;
+    }
+
+    /// <summary>
+    /// 判断旋转中心所在行是否为「偶数行」（本行格子数比上一行、下一行都少 1）。
+    /// 与 HexLayoutGroup 约定一致：行号 0,2,4,… 用 countEven，行号 1,3,5,… 用 countOdd。
+    /// 若每行格子数相同（如矩形平台 countEven==countOdd），则永远返回 false。
+    /// </summary>
+    /// <param name="centerY">中心点行号</param>
+    /// <param name="countEven">偶数行号（0,2,4,…）每行格子数</param>
+    /// <param name="countOdd">奇数行号（1,3,5,…）每行格子数</param>
+    public static bool IsCenterRowEvenRow(int centerY, int countEven, int countOdd)
+    {
+        int countThisRow = (centerY % 2 == 0) ? countEven : countOdd;
+        int countAbove = ((centerY - 1) % 2 == 0) ? countEven : countOdd;
+        int countBelow = ((centerY + 1) % 2 == 0) ? countEven : countOdd;
+        return countThisRow < countAbove && countThisRow < countBelow;
+    }
 
     /// <summary>
     /// [Obsolete] 根据当前回合计算挖掘旋转角度（顺时针度数）。已被圆环扫掠系统替代。
@@ -274,7 +312,7 @@ public class DrillAttackCalculator : MonoBehaviour
         {
             Vector2Int center = GetPlatformCenter();
             int inverseDegrees = (360 - miningRotationDegrees.Value) % 360;
-            platformPos = DrillShapeRotator.RotatePointAroundCenter(position, center, inverseDegrees);
+            platformPos = HexRotationLookupTable.GetInverseRotated(center, position.x, position.y, inverseDegrees);
         }
 
         PlacedDrillShape shape = _platformManager.GetShapeAtPosition(platformPos);
@@ -346,24 +384,56 @@ public class DrillAttackCalculator : MonoBehaviour
     }
 
     /// <summary>
-    /// 计算圆环扫掠攻击映射。每个钻头格以其到中心的欧氏距离为半径，
-    /// 360度旋转后覆盖同半径圆环上的所有矿石地图格子。
+    /// 每 60° 扫掠：以平台相对旋转中心为起点，在 0°/60°/120°/180°/240°/300° 各计算一次攻击图。
+    /// 用于「每 60° 计算一次挖矿」逻辑及动画按角度触发。
     /// </summary>
     /// <param name="drillData">钻头数据（用于获取永久加成）</param>
     /// <param name="mapWidth">矿石地图宽度</param>
     /// <param name="mapHeight">矿石地图高度</param>
-    /// <returns>圆环扫掠结果</returns>
-    public CircularSweepResult CalculateCircularSweepAttackMap(DrillData drillData = null, int mapWidth = 9, int mapHeight = 11)
+    /// <returns>每 60° 扫掠结果（6 个角度的 attackMap + angleToTargets）</returns>
+    public CircularSweepResultPer60 CalculateCircularSweepAttackMapPer60(DrillData drillData = null, int mapWidth = 9, int mapHeight = 11)
     {
         EnsureManagers();
 
-        CircularSweepResult result = new CircularSweepResult();
+        CircularSweepResultPer60 result = new CircularSweepResultPer60();
         Vector2Int center = GetPlatformCenter();
         List<PlacedDrillShape> placedShapes = _platformManager.GetPlacedShapes();
 
-        // 收集所有钻头占用格的半径和攻击强度
-        // key = 钻头格平台坐标, value = (radius, attackStrength, shapeId, instanceId)
-        var drillCellInfos = new List<(Vector2Int platformPos, float radius, int strength, string shapeId, string instanceId)>();
+        int[] angles = { 0, 60, 120, 180, 240, 300 };
+
+        foreach (int angle in angles)
+        {
+            Dictionary<Vector2Int, CellAttackInfo> attackMapAtAngle = BuildAttackMapAtAngle(placedShapes, center, angle, drillData);
+            result.attackMapsByAngle[angle] = attackMapAtAngle;
+
+            foreach (var kvp in attackMapAtAngle)
+            {
+                Vector2Int pos = kvp.Key;
+                if (pos.x >= 0 && pos.x < mapWidth && pos.y >= 0 && pos.y < mapHeight)
+                {
+                    result.sweepRange.Add(pos);
+                    float angleKey = (float)angle;
+                    if (!result.angleToTargets.ContainsKey(angleKey))
+                        result.angleToTargets[angleKey] = new List<Vector2Int>();
+                    if (!result.angleToTargets[angleKey].Contains(pos))
+                        result.angleToTargets[angleKey].Add(pos);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 在指定角度下构建攻击图（平台格绕旋转中心旋转后落点，同格累加攻击力）
+    /// </summary>
+    private Dictionary<Vector2Int, CellAttackInfo> BuildAttackMapAtAngle(
+        List<PlacedDrillShape> placedShapes,
+        Vector2Int center,
+        int angle,
+        DrillData drillData)
+    {
+        var attackMap = new Dictionary<Vector2Int, CellAttackInfo>();
 
         foreach (var placedShape in placedShapes)
         {
@@ -373,24 +443,66 @@ public class DrillAttackCalculator : MonoBehaviour
             List<Vector2Int> occupiedCells = placedShape.GetOccupiedCells(config);
             foreach (var cell in occupiedCells)
             {
-                float dx = cell.x - center.x;
-                float dy = cell.y - center.y;
-                float radius = Mathf.Sqrt(dx * dx + dy * dy);
                 int strength = CalculateCellAttackStrength(cell, config, placedShape, drillData);
-                drillCellInfos.Add((cell, radius, strength, placedShape.shapeId, placedShape.instanceId));
-                result.attackRadii.Add(radius);
+                Vector2Int pos = HexRotationLookupTable.GetRotated(center, cell.x, cell.y, angle);
+
+                if (attackMap.TryGetValue(pos, out CellAttackInfo existing))
+                {
+                    existing.attackStrength += strength;
+                }
+                else
+                {
+                    attackMap[pos] = new CellAttackInfo
+                    {
+                        position = pos,
+                        attackStrength = strength,
+                        sourceShapeId = placedShape.shapeId,
+                        sourceInstanceId = placedShape.instanceId
+                    };
+                }
             }
         }
 
-        // 遍历矿石地图上的所有格子，检查是否在某个扫掠半径的圆环上
+        return attackMap;
+    }
+
+    /// <summary>
+    /// 计算圆环扫掠攻击映射。半径单位：格子数/六边形圈数；同圈数的地图格与钻头格匹配。
+    /// </summary>
+    [System.Obsolete("请使用 CalculateCircularSweepAttackMapPer60，按每 60° 计算并以相对旋转中心为起点")]
+    public CircularSweepResult CalculateCircularSweepAttackMap(DrillData drillData = null, int mapWidth = 9, int mapHeight = 11)
+    {
+        EnsureManagers();
+
+        CircularSweepResult result = new CircularSweepResult();
+        Vector2Int center = GetPlatformCenter();
+        List<PlacedDrillShape> placedShapes = _platformManager.GetPlacedShapes();
+
+        // 收集所有钻头占用格的圈数（格子数半径）和攻击强度
+        var drillCellInfos = new List<(Vector2Int platformPos, int ring, int strength, string shapeId, string instanceId)>();
+
+        foreach (var placedShape in placedShapes)
+        {
+            DrillShapeConfig config = _configManager.GetDrillShapeConfig(placedShape.shapeId);
+            if (config == null) continue;
+
+            List<Vector2Int> occupiedCells = placedShape.GetOccupiedCells(config);
+            foreach (var cell in occupiedCells)
+            {
+                int ring = GetGridRingDistance(center, cell);
+                int strength = CalculateCellAttackStrength(cell, config, placedShape, drillData);
+                drillCellInfos.Add((cell, ring, strength, placedShape.shapeId, placedShape.instanceId));
+                result.attackRadii.Add(ring);
+            }
+        }
+
+        // 遍历矿石地图，同圈数则命中（半径=格子数）
         for (int x = 0; x < mapWidth; x++)
         {
             for (int y = 0; y < mapHeight; y++)
             {
                 Vector2Int mapPos = new Vector2Int(x, y);
-                float mdx = x - center.x;
-                float mdy = y - center.y;
-                float mapRadius = Mathf.Sqrt(mdx * mdx + mdy * mdy);
+                int mapRing = GetGridRingDistance(center, mapPos);
 
                 int totalStrength = 0;
                 string bestShapeId = null;
@@ -399,7 +511,7 @@ public class DrillAttackCalculator : MonoBehaviour
 
                 foreach (var info in drillCellInfos)
                 {
-                    if (Mathf.Abs(mapRadius - info.radius) < RADIUS_TOLERANCE)
+                    if (mapRing == info.ring)
                     {
                         totalStrength += info.strength;
                         if (bestShapeId == null)
@@ -422,7 +534,6 @@ public class DrillAttackCalculator : MonoBehaviour
                         sourceInstanceId = bestInstanceId
                     };
 
-                    // 中心点所在格子：每秒挖掘1次，旋转一圈=6轮钻探 → 在 0°、60°、120°、180°、240°、300° 各触发一次
                     if (mapPos == center)
                     {
                         for (int k = 0; k < 6; k++)
@@ -436,7 +547,6 @@ public class DrillAttackCalculator : MonoBehaviour
                     }
                     else
                     {
-                        // 非中心格：按该格相对中心的角度触发
                         float angle = GetCellAngleFromCenter(mapPos, center);
                         float roundedAngle = Mathf.Round(angle);
                         if (!result.angleToTargets.ContainsKey(roundedAngle))
@@ -451,50 +561,37 @@ public class DrillAttackCalculator : MonoBehaviour
     }
 
     /// <summary>
-    /// 获取圆环扫掠覆盖的所有格子坐标（不含攻击强度，仅范围）
+    /// 获取圆环扫掠覆盖的所有格子坐标（半径单位：格子数/六边形圈数）。
+    /// 范围 = 以旋转中心为圆心、半径 R 的六边形圆盘，R = 所有钻头占用格相对中心的最大圈数。
     /// </summary>
     public HashSet<Vector2Int> GetCircularSweepRange(int mapWidth = 9, int mapHeight = 11)
     {
         EnsureManagers();
 
-        HashSet<Vector2Int> range = new HashSet<Vector2Int>();
         Vector2Int center = GetPlatformCenter();
+        int maxRing = 0;
         List<PlacedDrillShape> placedShapes = _platformManager.GetPlacedShapes();
-
-        HashSet<float> radii = new HashSet<float>();
         foreach (var placedShape in placedShapes)
         {
             DrillShapeConfig config = _configManager.GetDrillShapeConfig(placedShape.shapeId);
             if (config == null) continue;
-
-            List<Vector2Int> occupiedCells = placedShape.GetOccupiedCells(config);
-            foreach (var cell in occupiedCells)
+            foreach (var cell in placedShape.GetOccupiedCells(config))
             {
-                float dx = cell.x - center.x;
-                float dy = cell.y - center.y;
-                radii.Add(Mathf.Sqrt(dx * dx + dy * dy));
+                int ring = GetGridRingDistance(center, cell);
+                if (ring > maxRing) maxRing = ring;
             }
         }
 
+        HashSet<Vector2Int> range = new HashSet<Vector2Int>();
         for (int x = 0; x < mapWidth; x++)
         {
             for (int y = 0; y < mapHeight; y++)
             {
-                float mdx = x - center.x;
-                float mdy = y - center.y;
-                float mapRadius = Mathf.Sqrt(mdx * mdx + mdy * mdy);
-
-                foreach (float r in radii)
-                {
-                    if (Mathf.Abs(mapRadius - r) < RADIUS_TOLERANCE)
-                    {
-                        range.Add(new Vector2Int(x, y));
-                        break;
-                    }
-                }
+                Vector2Int pos = new Vector2Int(x, y);
+                if (GetGridRingDistance(center, pos) <= maxRing)
+                    range.Add(pos);
             }
         }
-
         return range;
     }
 
@@ -521,16 +618,14 @@ public class DrillAttackCalculator : MonoBehaviour
 
     /// <summary>
     /// 为圆环扫掠计算对特定矿石的攻击强度（考虑矿石类型触发的特性）。
-    /// 累加所有在同一半径圆环上的钻头格的攻击强度。
+    /// 半径单位：格子数/六边形圈数；累加所有与 mapPosition 同圈数的钻头格攻击强度。
     /// </summary>
     public int CalculateCircularSweepStrengthForOre(Vector2Int mapPosition, string oreType, DrillData drillData = null, int mapWidth = 9, int mapHeight = 11)
     {
         EnsureManagers();
 
         Vector2Int center = GetPlatformCenter();
-        float mdx = mapPosition.x - center.x;
-        float mdy = mapPosition.y - center.y;
-        float mapRadius = Mathf.Sqrt(mdx * mdx + mdy * mdy);
+        int mapRing = GetGridRingDistance(center, mapPosition);
 
         List<PlacedDrillShape> placedShapes = _platformManager.GetPlacedShapes();
         int totalStrength = 0;
@@ -543,14 +638,9 @@ public class DrillAttackCalculator : MonoBehaviour
             List<Vector2Int> occupiedCells = placedShape.GetOccupiedCells(config);
             foreach (var cell in occupiedCells)
             {
-                float dx = cell.x - center.x;
-                float dy = cell.y - center.y;
-                float drillRadius = Mathf.Sqrt(dx * dx + dy * dy);
-
-                if (Mathf.Abs(mapRadius - drillRadius) < RADIUS_TOLERANCE)
-                {
+                int drillRing = GetGridRingDistance(center, cell);
+                if (mapRing == drillRing)
                     totalStrength += CalculateCellAttackStrength(cell, config, placedShape, drillData, oreType);
-                }
             }
         }
 
@@ -594,9 +684,25 @@ public class CircularSweepResult
     /// <summary>角度(0~360) -> 该角度触发攻击的目标格列表（用于动画按角度触发）</summary>
     public Dictionary<float, List<Vector2Int>> angleToTargets = new Dictionary<float, List<Vector2Int>>();
 
-    /// <summary>所有钻头格的扫掠半径集合</summary>
+    /// <summary>所有钻头格的扫掠半径集合（Obsolete 方法中为格子数/六边形圈数）</summary>
     public HashSet<float> attackRadii = new HashSet<float>();
 
     /// <summary>扫掠范围内所有被覆盖的格子坐标</summary>
+    public HashSet<Vector2Int> sweepRange = new HashSet<Vector2Int>();
+}
+
+/// <summary>
+/// 每 60° 扫掠攻击结果（0/60/120/180/240/300 各一张攻击图 + 角度→目标格，用于动画）
+/// </summary>
+[Serializable]
+public class CircularSweepResultPer60
+{
+    /// <summary>角度(0/60/120/180/240/300) -> 该角度下的攻击图</summary>
+    public Dictionary<int, Dictionary<Vector2Int, CellAttackInfo>> attackMapsByAngle = new Dictionary<int, Dictionary<Vector2Int, CellAttackInfo>>();
+
+    /// <summary>角度(0/60/120/180/240/300，float) -> 该角度触发攻击的目标格列表（用于动画按角度触发）</summary>
+    public Dictionary<float, List<Vector2Int>> angleToTargets = new Dictionary<float, List<Vector2Int>>();
+
+    /// <summary>扫掠范围内所有被覆盖的格子坐标（6 角度并集）</summary>
     public HashSet<Vector2Int> sweepRange = new HashSet<Vector2Int>();
 }

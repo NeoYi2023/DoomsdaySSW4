@@ -119,12 +119,12 @@ public class TurnManager : MonoBehaviour
                 {
                     int currentLayerDepth = miningData.currentDepth >= 1 ? miningData.currentDepth : 1;
 
-                    // 计算圆环扫掠攻击结果
+                    // 计算每 60° 扫掠攻击结果（用于动画按角度触发）
                     DrillAttackCalculator calculator = DrillAttackCalculator.Instance;
-                    CircularSweepResult sweepResult = calculator.CalculateCircularSweepAttackMap(
+                    CircularSweepResultPer60 sweepResult = calculator.CalculateCircularSweepAttackMapPer60(
                         drill, MiningManager.LAYER_WIDTH, MiningManager.LAYER_HEIGHT);
 
-                    // 执行挖矿逻辑（造成伤害）
+                    // 执行挖矿逻辑（按 0°/60°/120°/180°/240°/300° 顺序施加伤害）
                     MiningResult result = _miningManager.AttackOresInRange(drill, currentLayerDepth);
 
                     // 播放360度旋转动画，过程中按角度触发攻击特效
