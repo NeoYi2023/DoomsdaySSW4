@@ -75,6 +75,15 @@ public class MiningMapView : MonoBehaviour
     [SerializeField] private Color miningOutlineHighlightColor = new Color(1f, 1f, 1f, 1f); // 被描边格子的高亮色
     [SerializeField] [Range(0f, 1f)] private float miningOutlineHighlightBlend = 0.45f; // 高亮混合强度（0=无高亮，1=纯高亮色）
     
+    [Header("挖掘变亮特效")]
+    [SerializeField] private bool enableMiningBrightness = true; // 是否在正在被挖的格子上显示变亮 overlay
+    [SerializeField] private Sprite miningBrightnessOverlaySprite; // overlay 图片（不填则用纯色）
+    [SerializeField] private Color miningBrightnessOverlayColor = new Color(1f, 1f, 1f, 0.35f); // 变亮层颜色（有图时作 tint，无图时作纯色）
+    [SerializeField] private int miningBrightnessOverlayDurationMs = 0; // overlay 在离开「正在被挖」后的持续显示时间（毫秒），0 表示立即消失
+    
+    private const string MINING_BRIGHTNESS_OVERLAY_NAME = "MiningBrightnessOverlay";
+    private Dictionary<Vector2Int, float> _miningBrightnessOverlayHideAt = new Dictionary<Vector2Int, float>(); // 格子坐标 -> 应隐藏的 Time.time
+    
     private readonly Color _defaultOreColor = new Color32(0xE3, 0xC1, 0x76, 0xFF);
     
     // 已挖掘格子图片路径
@@ -1257,7 +1266,7 @@ public class MiningMapView : MonoBehaviour
     {
         HashSet<Vector2Int> newSet = positions == null ? new HashSet<Vector2Int>() : new HashSet<Vector2Int>(positions);
 
-        // 移除不再需要描边的格子：关闭描边并恢复格子原始颜色
+        // 移除不再需要描边的格子：关闭描边并恢复格子原始颜色；变亮 overlay 按持续时间延迟隐藏
         foreach (var pos in _currentMiningOutlineTiles.ToList())
         {
             if (newSet.Contains(pos)) continue;
@@ -1272,11 +1281,15 @@ public class MiningMapView : MonoBehaviour
                     if (_baseColors.TryGetValue(pos, out Color baseColor))
                         img.color = baseColor;
                 }
+                if (miningBrightnessOverlayDurationMs <= 0)
+                    SetMiningBrightnessOverlay(tileObj, false);
+                else
+                    _miningBrightnessOverlayHideAt[pos] = Time.time + miningBrightnessOverlayDurationMs * 0.001f;
             }
             _currentMiningOutlineTiles.Remove(pos);
         }
 
-        // 为需要描边的格子：加粗白色描边 + 高亮
+        // 为需要描边的格子：加粗白色描边 + 高亮 + 变亮 overlay
         foreach (var pos in newSet)
         {
             if (!_tileMap.TryGetValue(pos, out GameObject tileObj) || tileObj == null) continue;
@@ -1290,7 +1303,77 @@ public class MiningMapView : MonoBehaviour
             outline.enabled = true;
             if (_baseColors.TryGetValue(pos, out Color baseColor))
                 img.color = Color.Lerp(baseColor, miningOutlineHighlightColor, miningOutlineHighlightBlend);
+            if (enableMiningBrightness)
+            {
+                _miningBrightnessOverlayHideAt.Remove(pos); // 仍在描边内，不参与延迟隐藏
+                SetMiningBrightnessOverlay(tileObj, true);
+            }
             _currentMiningOutlineTiles.Add(pos);
+        }
+    }
+
+    private void Update()
+    {
+        // 到点的 overlay 延迟隐藏
+        if (_miningBrightnessOverlayHideAt.Count == 0) return;
+        float now = Time.time;
+        List<Vector2Int> toRemove = null;
+        foreach (var kvp in _miningBrightnessOverlayHideAt)
+        {
+            if (now < kvp.Value) continue;
+            if (toRemove == null) toRemove = new List<Vector2Int>();
+            toRemove.Add(kvp.Key);
+            if (_tileMap.TryGetValue(kvp.Key, out GameObject tileObj) && tileObj != null)
+                SetMiningBrightnessOverlay(tileObj, false);
+        }
+        if (toRemove != null)
+        {
+            foreach (var pos in toRemove)
+                _miningBrightnessOverlayHideAt.Remove(pos);
+        }
+    }
+
+    /// <summary>
+    /// 为格子设置或移除「挖掘变亮」overlay（展示图片或纯色，铺满格子）
+    /// </summary>
+    private void SetMiningBrightnessOverlay(GameObject tileObj, bool show)
+    {
+        if (tileObj == null) return;
+        Transform existing = tileObj.transform.Find(MINING_BRIGHTNESS_OVERLAY_NAME);
+        if (show)
+        {
+            GameObject overlayGo;
+            if (existing != null)
+            {
+                overlayGo = existing.gameObject;
+            }
+            else
+            {
+                overlayGo = new GameObject(MINING_BRIGHTNESS_OVERLAY_NAME);
+                overlayGo.transform.SetParent(tileObj.transform, false);
+                RectTransform rect = overlayGo.AddComponent<RectTransform>();
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.one;
+                rect.offsetMin = Vector2.zero;
+                rect.offsetMax = Vector2.zero;
+                Image overlayImage = overlayGo.AddComponent<Image>();
+                overlayImage.sprite = miningBrightnessOverlaySprite;
+                overlayImage.color = miningBrightnessOverlayColor;
+                overlayImage.raycastTarget = false;
+                overlayGo.transform.SetAsLastSibling();
+            }
+            Image img = overlayGo.GetComponent<Image>();
+            if (img != null)
+            {
+                img.sprite = miningBrightnessOverlaySprite;
+                img.color = miningBrightnessOverlayColor;
+            }
+            overlayGo.SetActive(true);
+        }
+        else
+        {
+            if (existing != null)
+                existing.gameObject.SetActive(false);
         }
     }
 

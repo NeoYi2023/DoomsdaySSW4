@@ -3119,7 +3119,7 @@ UI系统
 - **挖矿地图静态格子方案（与 PlatformGrid 一致）**：
 - 可选采用与钻机平台相同的「静态格子 + HexLayoutGroup」方式：在 `MiningMapContainer` 下新增 **MapGridRoot** 节点，在 MapGridRoot 上挂载 **HexLayoutGroup**，参数与钻机平台 **GridRoot** 对齐（FlatTop、Row、Odd、ConstraintCountEven/Odd 等），并设置 **StartCorner = BottomLeft**（从左下角开始排布）；美术可以根据需求布置任意数量的正六边形格子，其中至少 `LAYER_WIDTH × LAYER_HEIGHT` 个格子映射到逻辑挖矿地图，其余外圈格子仅用于视觉表现。  
   - 每个矿石格子挂载轻量标记组件 **MiningMapCell**，仅标记地图坐标 `(x, y)` 并缓存 `Image`/`Text` 引用，供 `MiningMapView` 遍历与更新显示；用于逻辑计算的格子在 Hierarchy 中按 **row-major** 顺序排列：索引 `i` 对应逻辑坐标 `(x, y) = (i % LAYER_WIDTH, i / LAYER_WIDTH)`，即第 1 格 (0,0) 位于**左下角**，第 `LAYER_WIDTH × LAYER_HEIGHT` 格位于右上角。在默认 9×9 配置下，这一映射对应第 1 格 (0,0)…第 81 格 (8,8)；外圈仅用于渲染的格子则可以使用越界坐标或单独标记以便在逻辑中忽略。  
-  - 当使用静态格子时，`MiningMapView` 在 Start/UpdateMap 时从 MapGridRoot 下 `GetComponentsInChildren<MiningMapCell>` 建立坐标到格子的映射，仅根据当前层 `MiningTileData` 更新每个格子的 `Image.sprite`/`Image.color`、子节点 `TextMeshProUGUI.text` 以及高亮、晃动等逻辑，不再执行 `ClearTiles()` 与 `CreateTile()` 动态创建/销毁；**此外会根据 `PlatformGrid` 中相同 `(x, y)` 的 `DrillPlatformCell` 的几何信息（位置与尺寸）对 `MiningMapCell` 的 `RectTransform` 进行二次调整，使两者在 UI 上一一对应、像素级对齐**。
+  - 当使用静态格子时，`MiningMapView` 在 Start/UpdateMap 时从 MapGridRoot 下 `GetComponentsInChildren<MiningMapCell>` 建立坐标到格子的映射，仅根据当前层 `MiningTileData` 更新每个格子的 `Image.sprite`/`Image.color`、子节点 `TextMeshProUGUI.text` 以及高亮、晃动等逻辑，不再执行 `ClearTiles()` 与 `CreateTile()` 动态创建/销毁；**挖掘过程中**会对「当前正在被挖且触发振动的」MiningMapCell 格子施加**变亮特效**（可选半透明白色 overlay + 描边），旋转结束后清除；**此外会根据 `PlatformGrid` 中相同 `(x, y)` 的 `DrillPlatformCell` 的几何信息（位置与尺寸）对 `MiningMapCell` 的 `RectTransform` 进行二次调整，使两者在 UI 上一一对应、像素级对齐**。
   - **MiningMapCell 数据结构**：与 `DrillPlatformCell` 类似，仅承担「标记 + 坐标 + 组件缓存」职责。伪代码示例：
     ```csharp
     public class MiningMapCell : MonoBehaviour

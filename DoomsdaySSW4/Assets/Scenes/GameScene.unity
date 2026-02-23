@@ -3586,11 +3586,15 @@ MonoBehaviour:
   enableDrillRotation: 1
   drillRotationDegreesPerSecond: 60
   enableMiningOutline: 1
-  miningOutlineWindowSeconds: 1
+  miningOutlineWindowSeconds: 0.5
   miningOutlineColor: {r: 1, g: 0.9, b: 0.2, a: 1}
   miningOutlineDistance: {x: 2, y: 2}
   miningOutlineHighlightColor: {r: 1, g: 1, b: 1, a: 1}
   miningOutlineHighlightBlend: 0.45
+  enableMiningBrightness: 1
+  miningBrightnessOverlaySprite: {fileID: 21300000, guid: 5fed8173024c02c40823efdcddd7844c, type: 3}
+  miningBrightnessOverlayColor: {r: 1, g: 1, b: 1, a: 0.35}
+  miningBrightnessOverlayDurationMs: 0
 --- !u!1 &202493268
 GameObject:
   m_ObjectHideFlags: 0
@@ -16039,6 +16043,10 @@ MonoBehaviour:
   miningOutlineDistance: {x: 2, y: 2}
   miningOutlineHighlightColor: {r: 1, g: 1, b: 1, a: 1}
   miningOutlineHighlightBlend: 0.45
+  enableMiningBrightness: 1
+  miningBrightnessOverlaySprite: {fileID: 0}
+  miningBrightnessOverlayColor: {r: 1, g: 1, b: 1, a: 0.35}
+  miningBrightnessOverlayDurationMs: 0
 --- !u!114 &803340171
 MonoBehaviour:
   m_ObjectHideFlags: 0
